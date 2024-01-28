@@ -18,20 +18,18 @@ impl Texture {
     pub fn from_bytes(
         device: &Device,
         queue: &Queue,
-        bytes: &[u8],
-        label: &str,
+        bytes: [u8; HEIGHT / 8 * WIDTH],
     ) -> Result<Self, Box<dyn Error>> {
         let header = format!("P4 {} {}\n", WIDTH, HEIGHT);
-        let file: Vec<u8> = [header.as_bytes(), bytes].concat();
+        let file: Vec<u8> = [header.as_bytes(), &bytes.map(|b| !b)].concat();
         let img = image::load_from_memory_with_format(file.as_bytes(), ImageFormat::Pnm)?;
-        Self::from_image(device, queue, &img, Some(label))
+        Self::from_image(device, queue, &img)
     }
 
     fn from_image(
         device: &Device,
         queue: &Queue,
         img: &DynamicImage,
-        label: Option<&str>,
     ) -> Result<Self, Box<dyn Error>> {
         let rgba = img.to_rgba8();
         let dimensions = img.dimensions();
@@ -42,7 +40,7 @@ impl Texture {
             depth_or_array_layers: 1,
         };
         let texture = device.create_texture(&TextureDescriptor {
-            label,
+            label: None,
             size,
             mip_level_count: 1,
             sample_count: 1,

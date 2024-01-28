@@ -5,7 +5,7 @@ use wgpu::{
 };
 use winit::{dpi::PhysicalSize, window::Window};
 
-use crate::{screen::Screen, texture::Texture, ASPECT_RATIO};
+use crate::{chip8::screen::Screen, texture::Texture, ASPECT_RATIO, HEIGHT, WIDTH};
 
 pub struct Renderer<'a> {
     size: PhysicalSize<u32>,
@@ -60,8 +60,8 @@ impl<'a> Renderer<'a> {
         config.present_mode = PresentMode::AutoVsync;
 
         surface.configure(&device, &config);
-        let diffuse_bytes = Screen::CLEAR;
-        let diffuse_texture = Texture::from_bytes(&device, &queue, &diffuse_bytes, "screen").unwrap();
+        let screen_buffer = Screen::CLEAR;
+        let diffuse_texture = Texture::from_bytes(&device, &queue, screen_buffer).unwrap();
 
         let texture_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -243,8 +243,8 @@ impl<'a> Renderer<'a> {
         });
     }
 
-    pub fn update(&mut self, bytes: &[u8]) {
-        self.diffuse_texture = Texture::from_bytes(&self.device, &self.queue, bytes, "test2").unwrap();
+    pub fn update_screen(&mut self, bytes: [u8; WIDTH / 8 * HEIGHT]) {
+        self.diffuse_texture = Texture::from_bytes(&self.device, &self.queue, bytes).unwrap();
         self.diffuse_bind_group = self.device.create_bind_group(
             &wgpu::BindGroupDescriptor {
                 layout: &self.texture_bind_group_layout,

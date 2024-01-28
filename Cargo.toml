@@ -11,6 +11,7 @@ wgpu = "0.19.0"
 bytemuck = {version = "1.14.0", features = ["derive"]}
 rodio = "0.17.3"
 futures = "0.3.30"
+rand = "0.8.5"
 
 [dependencies.image]
 version = "0.24"
