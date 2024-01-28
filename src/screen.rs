@@ -1,46 +1,45 @@
-use bytemuck::{Pod, Zeroable};
+use crate::{HEIGHT, WIDTH};
+use std::{error::Error, fmt::Display};
 
-pub const WIDTH: usize = 64;
-pub const HEIGHT: usize = 32;
+#[derive(Debug, Copy, Clone)]
+pub struct ScreenError(usize, usize);
+impl Display for ScreenError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Pixel does not exist in screen")?;
+        Ok(())
+    }
+}
+impl Error for ScreenError {}
 
-pub type ScreenBuffer = [[Tile; WIDTH]; HEIGHT];
+#[repr(transparent)]
+pub struct Screen([u8; (WIDTH / 8) * HEIGHT]);
 
-#[derive(Debug, Clone)]
-pub struct Screen {
-    buffer: ScreenBuffer,
+impl Default for Screen {
+    fn default() -> Self {
+        Self([0x00_u8; (WIDTH / 8) * HEIGHT])
+    }
 }
 
 impl Screen {
-    pub fn new() -> Screen {
-        Screen {
-            buffer: [[Tile::default(); WIDTH]; HEIGHT],
-        }
+    //Bitwise not due to pbm P4 file format specification
+    pub const CLEAR: [u8; (WIDTH / 8) * HEIGHT] = [!0x00; (WIDTH / 8) * HEIGHT];
+
+    pub fn put_pixel(&mut self, x: usize, y: usize) -> Result<(), Box<dyn Error>> {
+        let index = Self::get_index(x, y);
+        *self.0.get_mut(index).ok_or(ScreenError(x, y))? |= 0x01_u8.rotate_left(7 - (x as u32 % 8));
+        Ok(())
+    }
+    pub fn clear_pixel(&mut self, x: usize, y: usize) -> Result<(), Box<dyn Error>> {
+        let index = Self::get_index(x, y);
+        *self.0.get_mut(index).ok_or(ScreenError(x, y))? &= 0x01_u8.rotate_left(7 - (x as u32 % 8));
+        Ok(())
     }
 
-    pub fn set_pixel(&mut self, x: u8, y: u8, p: Tile) {
-        self.buffer[y as usize][x as usize] = p;
+    fn get_index(x: usize, y: usize) -> usize {
+        (x / 8) + (y * WIDTH / 8)
     }
-    pub fn read_pixel(&self, x: u8, y: u8) -> Tile {
-        self.buffer[y as usize][x as usize]
-    }
-    pub fn extract(&self) -> ScreenBuffer {
-        self.buffer
-    }
-}
 
-#[repr(align(4))]
-#[repr(u32)]
-#[repr(C)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
-pub enum Tile {
-    #[default]
-    Off = 0,
-    On,
-    Text(u8),
-}
-unsafe impl Zeroable for Tile {
-    fn zeroed() -> Self {
-        unsafe { core::mem::zeroed() }
+    pub fn as_bytes(&self) -> [u8; HEIGHT / 8 * WIDTH] {
+        self.0.map(|n| !n)
     }
 }
-unsafe impl Pod for Tile {}

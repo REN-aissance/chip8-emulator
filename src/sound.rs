@@ -1,14 +1,12 @@
+use mpsc::Receiver;
+use rodio::{OutputStream, Source};
 use std::{
-    sync::mpsc,
+    sync::mpsc::{self, Sender},
     thread::{self},
     time::Duration,
 };
 
-use mpsc::{Receiver, Sender};
-use rodio::{
-    source::{SineWave, Source},
-    OutputStream, Sink,
-};
+use crate::square_wave::SquareWave;
 
 #[derive(Eq, PartialEq, Copy, Clone, Debug)]
 pub enum AudioEvent {
@@ -27,22 +25,20 @@ impl Buzzer {
         Self { tx }
     }
 
-    fn play_internal(d: Duration) {
-        let (_stream, stream_handle) = OutputStream::try_default().unwrap();
-        let sink = Sink::try_new(&stream_handle).unwrap();
-        let sound = SineWave::new(220.0).take_duration(d).amplify(0.2);
-        sink.append(sound);
-        sink.sleep_until_end();
-    }
-
     pub fn play(&self, d: Duration) {
         self.tx.send(AudioEvent::Play(d)).unwrap();
     }
 
     fn event_handler(rx: Receiver<AudioEvent>) {
+        let sound = SquareWave::new(261.60).amplify(0.1);
+        let (_stream, stream_handle) = OutputStream::try_default().unwrap();
         loop {
             match rx.recv() {
-                Ok(AudioEvent::Play(d)) => Self::play_internal(d),
+                Ok(AudioEvent::Play(d)) => {
+                    let sound = sound.clone().take_duration(d);
+                    let _ = stream_handle.play_raw(sound);
+                    thread::sleep(d);
+                }
                 Ok(AudioEvent::Terminate) => break,
                 Err(e) => panic!("{}", e),
             }
