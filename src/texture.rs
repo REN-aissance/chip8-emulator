@@ -18,10 +18,15 @@ impl Texture {
     pub fn from_bytes(
         device: &Device,
         queue: &Queue,
-        bytes: [u8; HEIGHT / 8 * WIDTH],
+        bytes: Vec<u8>,
     ) -> Result<Self, Box<dyn Error>> {
         let header = format!("P4 {} {}\n", WIDTH, HEIGHT);
-        let file: Vec<u8> = [header.as_bytes(), &bytes.map(|b| !b)].concat();
+        //Mapped NOT due to the specifications of pbm format
+        let file: Vec<u8> = [
+            header.as_bytes(),
+            &bytes.into_iter().map(|b| !b).collect::<Vec<_>>(),
+        ]
+        .concat();
         let img = image::load_from_memory_with_format(file.as_bytes(), ImageFormat::Pnm)?;
         Self::from_image(device, queue, &img)
     }

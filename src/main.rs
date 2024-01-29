@@ -1,14 +1,15 @@
-use chip8::Chip8;
+#![feature(let_chains)]
+
+use chip8::{Chip8, Chip8Event};
 use render::Renderer;
 use winit::{
     event::{ElementState, Event, KeyEvent, WindowEvent},
-    event_loop::{ControlFlow, EventLoop},
+    event_loop::{ControlFlow, EventLoop, EventLoopBuilder},
     keyboard::{KeyCode, PhysicalKey},
     window::Window,
 };
 
 mod render;
-mod square_wave;
 mod texture;
 mod chip8;
 
@@ -16,17 +17,20 @@ pub const ASPECT_RATIO: f32 = 4.0 / 3.0;
 pub const WIDTH: usize = 64;
 pub const HEIGHT: usize = 32;
 
-async fn execute_event_loop(event_loop: EventLoop<()>, window: Window) {
+async fn execute_event_loop(event_loop: EventLoop<Chip8Event>, window: Window) {
     let mut renderer = Renderer::new(&window).await;
-    let mut chip8 = Chip8::new();
-    chip8.load_rom_from_bytes(include_bytes!("../roms/MISSILE"));
+    let ep = event_loop.create_proxy();
+    let mut chip8 = Chip8::new(ep);
+    chip8.load_rom_from_bytes(include_bytes!("../roms/GUESS"));
 
     let _ = event_loop.run(|event, event_target| match event {
-        Event::AboutToWait => {
-            chip8.update();
-            renderer.update_screen(chip8.get_display_buffer());
+        Event::UserEvent(Chip8Event::RequestRedraw(buffer)) => {
+            renderer.update_screen(buffer);
             window.request_redraw();
-        },
+        }
+        Event::AboutToWait => {
+            chip8.update(Chip8Event::Update);
+        }
         Event::WindowEvent { event, .. } => match event {
             WindowEvent::CloseRequested => event_target.exit(),
             WindowEvent::Resized(new_size) => renderer.resize(new_size),
@@ -62,9 +66,13 @@ async fn execute_event_loop(event_loop: EventLoop<()>, window: Window) {
                     KeyCode::KeyX => Some(13),
                     KeyCode::KeyC => Some(14),
                     KeyCode::KeyV => Some(15),
+                    KeyCode::Space => {
+                        chip8.sound_test();
+                        None
+                    }
                     _ => None,
                 } {
-                    chip8.set_key(key, state);
+                    chip8.update(Chip8Event::KeyEvent(key, state))
                 }
             },
             _ => (),
@@ -74,7 +82,7 @@ async fn execute_event_loop(event_loop: EventLoop<()>, window: Window) {
 }
 
 pub fn main() {
-    let event_loop = EventLoop::new().expect("Could not create event_loop");
+    let event_loop = EventLoopBuilder::<Chip8Event>::with_user_event().build().expect("Could not create event_loop");
     event_loop.set_control_flow(ControlFlow::Poll);
     let window = Window::new(&event_loop).expect("Could not create window");
     window.set_title("Chip-8 Emulator");

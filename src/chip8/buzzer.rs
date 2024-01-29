@@ -6,7 +6,7 @@ use std::{
     time::Duration,
 };
 
-use crate::square_wave::SquareWave;
+use crate::chip8::square_wave::SquareWave;
 
 #[derive(Eq, PartialEq, Copy, Clone, Debug)]
 pub enum AudioEvent {
@@ -30,11 +30,11 @@ impl Buzzer {
     }
 
     fn event_handler(rx: Receiver<AudioEvent>) {
-        let sound = SquareWave::new(261.60).amplify(0.1);
-        let (_stream, stream_handle) = OutputStream::try_default().unwrap();
         loop {
             match rx.recv() {
                 Ok(AudioEvent::Play(d)) => {
+                    let sound = SquareWave::new(261.60).amplify(0.1);
+                    let (_stream, stream_handle) = OutputStream::try_default().unwrap();
                     let sound = sound.clone().take_duration(d);
                     let _ = stream_handle.play_raw(sound);
                     thread::sleep(d);
