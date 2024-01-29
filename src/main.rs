@@ -21,7 +21,7 @@ async fn execute_event_loop(event_loop: EventLoop<Chip8Event>, window: Window) {
     let mut renderer = Renderer::new(&window).await;
     let ep = event_loop.create_proxy();
     let mut chip8 = Chip8::new(ep);
-    chip8.load_rom_from_bytes(include_bytes!("../roms/GUESS"));
+    chip8.load_rom_from_bytes(include_bytes!("../roms/test_opcode.ch8"));
 
     let _ = event_loop.run(|event, event_target| match event {
         Event::UserEvent(Chip8Event::RequestRedraw(buffer)) => {
@@ -50,29 +50,25 @@ async fn execute_event_loop(event_loop: EventLoop<Chip8Event>, window: Window) {
                     ElementState::Released => false,
                 };
                 if let Some(key) = match keycode {
-                    KeyCode::Digit1 => Some(0),
-                    KeyCode::Digit2 => Some(1),
-                    KeyCode::Digit3 => Some(2),
-                    KeyCode::Digit4 => Some(3),
-                    KeyCode::KeyQ => Some(4),
-                    KeyCode::KeyW => Some(5),
-                    KeyCode::KeyE => Some(6),
-                    KeyCode::KeyR => Some(7),
-                    KeyCode::KeyA => Some(8),
-                    KeyCode::KeyS => Some(9),
-                    KeyCode::KeyD => Some(10),
-                    KeyCode::KeyF => Some(11),
-                    KeyCode::KeyZ => Some(12),
-                    KeyCode::KeyX => Some(13),
-                    KeyCode::KeyC => Some(14),
-                    KeyCode::KeyV => Some(15),
-                    KeyCode::Space => {
-                        chip8.sound_test();
-                        None
-                    }
+                    KeyCode::Digit1 => Some(0x1),
+                    KeyCode::Digit2 => Some(0x2),
+                    KeyCode::Digit3 => Some(0x3),
+                    KeyCode::Digit4 => Some(0xC),
+                    KeyCode::KeyQ => Some(0x4),
+                    KeyCode::KeyW => Some(0x5),
+                    KeyCode::KeyE => Some(0x6),
+                    KeyCode::KeyR => Some(0xD),
+                    KeyCode::KeyA => Some(0x7),
+                    KeyCode::KeyS => Some(0x8),
+                    KeyCode::KeyD => Some(0x9),
+                    KeyCode::KeyF => Some(0xE),
+                    KeyCode::KeyZ => Some(0xA),
+                    KeyCode::KeyX => Some(0x0),
+                    KeyCode::KeyC => Some(0xB),
+                    KeyCode::KeyV => Some(0xF),
                     _ => None,
                 } {
-                    chip8.update(Chip8Event::KeyEvent(key, state))
+                    chip8.set_key(key, state)
                 }
             },
             _ => (),

@@ -1,4 +1,5 @@
 use std::error::Error;
+use std::fmt::Write;
 use std::time::{Duration, Instant};
 
 use rand::Rng;
@@ -37,7 +38,7 @@ pub struct Chip8 {
     pub pressed_keys: [bool; 16],
     event_sender: EventLoopProxy<Chip8Event>,
     halt: bool,
-    halt_register: usize,
+    most_recently_pressed: usize,
     ram: [u8; 4096],
     stack: [u16; 16],
     registers: [u8; 16],
@@ -125,7 +126,7 @@ impl Chip8 {
             stack: [0; 16],
             registers: [0; 16],
             halt: false,
-            halt_register: 0,
+            most_recently_pressed: 0,
             dt: 0,
             st: 0,
             i: 0,
@@ -135,7 +136,24 @@ impl Chip8 {
         }
     }
 
-    pub fn execute_instruction(&mut self, i: u16) -> Result<(), Box<dyn Error>> {
+    pub fn execute_instruction(&mut self, i: u16) -> Result<bool, Box<dyn Error>> {
+        #[cfg(feature = "trace")]
+        println!(
+            "PC:{:04X} STACK:{}|{:04X} REG:{} I:{:04X} DT:{}",
+            self.pc,
+            self.sp,
+            self.stack[(self.sp as usize).saturating_sub(1)],
+            self.registers
+                .iter()
+                .fold(String::new(), |mut acc, &e| {
+                    write!(acc, "{:02X}|", e).unwrap();
+                    acc
+                })
+                .trim_end_matches('|'),
+            i,
+            self.dt
+        );
+        let mut step = true;
         let [b, kk] = i.to_be_bytes();
         let x = (b & 0x0F) as usize;
         let y = (kk >> 4) as usize;
@@ -147,16 +165,20 @@ impl Chip8 {
             0x00E0 => self.screen.clear(),
             //RET
             0x00EE => {
+                self.sp = self.sp.saturating_sub(1);
                 self.pc = self.stack[self.sp as usize];
-                self.sp -= 1;
             }
             //JP addr
-            0x1000..=0x1FFF => self.pc = (i & 0x0FFF) - 2,
+            0x1000..=0x1FFF => {
+                self.pc = i & 0x0FFF;
+                step = false
+            }
             //CALL addr
             0x2000..=0x2FFF => {
-                self.sp += 1;
                 self.stack[self.sp as usize] = self.pc;
+                self.sp += 1;
                 self.pc = i & 0x0FFF;
+                step = false;
             }
             //SE Vx, byte
             0x3000..=0x3FFF => self.pc += if vx? == kk { 2 } else { 0 },
@@ -203,11 +225,14 @@ impl Chip8 {
                 self.registers[x] <<= 1;
             }
             //SNE Vx, Vy
-            0x9000..=0x9FF0 if i & 0x000F == 0 => self.sp += if vx? != vy? { 2 } else { 0 },
+            0x9000..=0x9FF0 if i & 0x000F == 0 => self.pc += if vx? != vy? { 2 } else { 0 },
             //LD I, addr
             0xA000..=0xAFFF => self.i = i & 0x0FFF,
             //JP V0, addr
-            0xB000..=0xBFFF => self.pc = (i & 0x0FFF) + self.registers[0x0] as u16,
+            0xB000..=0xBFFF => {
+                self.pc = (i & 0x0FFF) + self.registers[0x0] as u16;
+                step = false;
+            }
             //RND Vx, byte
             0xC000..=0xCFFF => {
                 let r = rand::thread_rng().gen_range(0x00..=0xFF);
@@ -222,28 +247,29 @@ impl Chip8 {
             }
             //SKP Vx
             0xE09E..=0xEF9E if i & 0x00FF == 0x9E => {
-                // println!("Checking for key press");
+                #[cfg(feature = "kb_debug")]
+                println!("Checking for key press {:X}", x);
                 self.pc += if self.pressed_keys[x] { 2 } else { 0 };
             }
             //SKNP Vx
             0xE0A1..=0xEFA1 if i & 0x00FF == 0xA1 => {
-                // println!("Checking key not pressed");
+                #[cfg(feature = "kb_debug")]
+                println!("Checking key not pressed {:X}", x);
                 self.pc += if !self.pressed_keys[x] { 2 } else { 0 };
             }
             //LD Vx, DT
             0xF007..=0xFF07 if i & 0x00FF == 0x07 => self.registers[x] = self.dt,
             //LD Vx, K
             0xF00A..=0xFF0A if i & 0x00FF == 0x0A => {
-                #[cfg(debug_assertions)]
-                println!("Halting for key press");
-                self.halt_register = x;
+                #[cfg(feature = "kb_debug")]
+                println!("Halting for key press {:X}", x);
+                self.most_recently_pressed = x;
                 self.halt = true;
             }
             //LD DT, Vx
             0xF00A..=0xFF15 if i & 0x00FF == 0x15 => self.dt = vx?,
             //LD ST, Vx
             0xF00A..=0xFF18 if i & 0x00FF == 0x18 => {
-                println!("TRYING TO PLAY SOUND");
                 self.buzzer.play(Duration::from_secs_f32(vx? as f32 / 60.0));
                 self.st = vx?;
             }
@@ -279,17 +305,13 @@ impl Chip8 {
                 self.i += (x + 1) as u16;
             }
             //SYS addr [IGNORE]
-            0x0000..=0x0FFF => (),
+            // 0x0000..=0x0FFF => (),
             _ => {
                 eprintln!("Unknown opcode: {:04x}", i);
                 return Err(Chip8Error.into());
             }
         }
-        #[cfg(debug_assertions)]
-        if i & 0x0FFF != 0 {
-            println!("{:04X}", i);
-        }
-        Ok(())
+        Ok(step)
     }
 
     pub fn get_display_buffer(&self) -> Vec<u8> {
@@ -306,24 +328,31 @@ impl Chip8 {
 
     pub fn update(&mut self, event: Chip8Event) {
         let t = Instant::now();
-        while !self.halt
-            && t.elapsed() < Duration::from_secs(1)
+        if let Chip8Event::KeyEvent(key, state) = event {
+            self.set_key(key, state);
+        }
+        while t.elapsed() < Duration::from_millis(10) //Run as fast as possible for 10 ms
             && let Some(b1) = self.ram.get(self.pc as usize).map(|&e| e as u16)
             && let Some(b2) = self.ram.get((self.pc + 1) as usize).map(|&e| e as u16)
         {
-            if let Chip8Event::KeyEvent(key, state) = event {
-                self.set_key(key, state);
+            if self.halt {
+                break;
             }
             let i = b1 << 8 | b2;
-            self.execute_instruction(i).unwrap();
-            self.pc += 2;
+            match self.execute_instruction(i) {
+                Ok(true) => self.pc += 2,
+                Err(e) => panic!("{}", e),
+                _ => (),
+            }
+            //Break if instruction is a draw call
             if i & 0xF000 == 0xD000 {
                 break;
             }
         }
+        self.screen_update();
     }
 
-    pub fn sound_test(&self) {
+    pub fn _sound_test(&self) {
         self.buzzer.play(Duration::from_millis(200));
     }
 
@@ -336,8 +365,12 @@ impl Chip8 {
 
     fn press_key(&mut self, key: u8) {
         self.pressed_keys[key as usize] = true;
-        self.registers[self.halt_register] = key;
-        self.halt = false;
+        if self.halt {
+            self.registers[self.most_recently_pressed] = key;
+            self.halt = false;
+            #[cfg(feature = "kb_debug")]
+            println!("Unhalted");
+        }
     }
 
     fn release_key(&mut self, key: u8) {

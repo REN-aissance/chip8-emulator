@@ -24,18 +24,27 @@ impl Screen {
             let y = (y + i) % h; //Wrap screen horizontally
             if let Some(lb) = self.get(x, y) {
                 let val = val.checked_shr(word_offset).unwrap_or(0);
+                let t = *lb | val;
                 *lb ^= val;
-                intersection |= lb.checked_shr(word_offset).unwrap_or(0) != val
+                intersection |= *lb != t;
+                #[cfg(feature = "intersection_debug")]
+                if intersection {
+                    println!("{:08b} {:08b}", *lb, t);
+                }
             }
             //Inserts to the next word (wrapping) if sprite crosses word boundary
             let x = (x + 8) % w; //Wrap screen horizontally
             if let Some(ub) = self.get(x, y) {
                 let val = val.checked_shl(8 - word_offset).unwrap_or(0);
+                let t = *ub | val;
                 *ub ^= val;
-                intersection |= ub.checked_shr(8 - word_offset).unwrap_or(0) != val
+                intersection |= *ub != t;
+                #[cfg(feature = "intersection_debug")]
+                if intersection {
+                    println!("{:08b} {:08b}", *ub, t);
+                }
             }
         });
-
         intersection
     }
 
