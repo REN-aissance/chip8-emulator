@@ -5,7 +5,7 @@ use wgpu::{
 };
 use winit::{dpi::PhysicalSize, window::Window};
 
-use crate::{chip8::screen::Screen, texture::Texture, ASPECT_RATIO};
+use crate::{chip8::screen::{Screen, ScreenBuffer}, texture::Texture, ASPECT_RATIO};
 
 pub struct Renderer<'a> {
     size: PhysicalSize<u32>,
@@ -60,8 +60,7 @@ impl<'a> Renderer<'a> {
         config.present_mode = PresentMode::AutoVsync;
 
         surface.configure(&device, &config);
-        let screen_buffer = Vec::from(Screen::CLEAR);
-        let diffuse_texture = Texture::from_bytes(&device, &queue, screen_buffer).unwrap();
+        let diffuse_texture = Texture::from_bytes(&device, &queue, Screen::default_buffer()).unwrap();
 
         let texture_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -243,7 +242,7 @@ impl<'a> Renderer<'a> {
         });
     }
 
-    pub fn update_screen(&mut self, bytes: Vec<u8>) {
+    pub fn update_screen(&mut self, bytes: ScreenBuffer) {
         self.diffuse_texture = Texture::from_bytes(&self.device, &self.queue, bytes).unwrap();
         self.diffuse_bind_group = self.device.create_bind_group(
             &wgpu::BindGroupDescriptor {

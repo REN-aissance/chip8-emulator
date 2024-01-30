@@ -1,4 +1,4 @@
-use image::{DynamicImage, EncodableLayout, GenericImageView, ImageFormat};
+use image::{DynamicImage, GenericImageView, ImageFormat};
 use std::error::Error;
 use wgpu::{
     AddressMode, Device, Extent3d, FilterMode, ImageCopyTexture, ImageDataLayout, Origin3d, Queue,
@@ -6,7 +6,7 @@ use wgpu::{
     TextureUsages, TextureView, TextureViewDescriptor,
 };
 
-use crate::{HEIGHT, WIDTH};
+use crate::{chip8::screen::ScreenBuffer, HEIGHT, WIDTH};
 
 pub struct Texture {
     pub texture: wgpu::Texture,
@@ -18,16 +18,13 @@ impl Texture {
     pub fn from_bytes(
         device: &Device,
         queue: &Queue,
-        bytes: Vec<u8>,
+        buffer: ScreenBuffer,
     ) -> Result<Self, Box<dyn Error>> {
-        let header = format!("P4 {} {}\n", WIDTH, HEIGHT);
+        let header: Vec<u8> = format!("P4 {} {}\n", WIDTH, HEIGHT).as_bytes().to_vec();
         //Mapped NOT due to the specifications of pbm format
-        let file: Vec<u8> = [
-            header.as_bytes(),
-            &bytes.into_iter().map(|b| !b).collect::<Vec<_>>(),
-        ]
-        .concat();
-        let img = image::load_from_memory_with_format(file.as_bytes(), ImageFormat::Pnm)?;
+        let file = [header, buffer.map(|e| !e).to_vec()].concat();
+
+        let img = image::load_from_memory_with_format(&file, ImageFormat::Pnm)?;
         Self::from_image(device, queue, &img)
     }
 

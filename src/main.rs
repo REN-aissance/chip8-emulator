@@ -1,6 +1,6 @@
 #![feature(let_chains)]
 
-use chip8::{Chip8, Chip8Event};
+use chip8::{event::Chip8Event, screen::Screen, Chip8};
 use render::Renderer;
 use winit::{
     event::{ElementState, Event, KeyEvent, WindowEvent},
@@ -13,28 +13,41 @@ mod render;
 mod texture;
 mod chip8;
 
-pub const ASPECT_RATIO: f32 = 4.0 / 3.0;
+pub const ASPECT_RATIO: f32 = 16.0 / 9.0;
 pub const WIDTH: usize = 64;
 pub const HEIGHT: usize = 32;
 
-async fn execute_event_loop(event_loop: EventLoop<Chip8Event>, window: Window) {
-    let mut renderer = Renderer::new(&window).await;
-    let ep = event_loop.create_proxy();
-    let mut chip8 = Chip8::new(ep);
-    chip8.load_rom_from_bytes(include_bytes!("../roms/test_opcode.ch8"));
+#[derive(Debug)]
+enum SystemEvent {
+    CloseRequested,
+    KeyEvent(u8, bool),
+    StartFastForward,
+    StopFastForward,
+}
+unsafe impl Send for SystemEvent {}
+unsafe impl Sync for SystemEvent {}
 
-    let _ = event_loop.run(|event, event_target| match event {
+async fn execute_event_loop(chip8: Chip8, event_loop: EventLoop<Chip8Event>, window: Window) {
+    let mut renderer = Renderer::new(&window).await;
+    let mut screen_buffer = Box::new(Screen::default_buffer());
+
+    event_loop.run(|event, event_target| match event {
         Event::UserEvent(Chip8Event::RequestRedraw(buffer)) => {
-            renderer.update_screen(buffer);
-            window.request_redraw();
+            screen_buffer = buffer;
         }
         Event::AboutToWait => {
-            chip8.update(Chip8Event::Update);
-        }
+            window.request_redraw()
+        },
         Event::WindowEvent { event, .. } => match event {
-            WindowEvent::CloseRequested => event_target.exit(),
+            WindowEvent::CloseRequested => {
+                chip8.send_event(SystemEvent::CloseRequested);
+                event_target.exit()
+            },
             WindowEvent::Resized(new_size) => renderer.resize(new_size),
-            WindowEvent::RedrawRequested => renderer.render(),
+            WindowEvent::RedrawRequested => {
+                renderer.update_screen(*screen_buffer);
+                renderer.render()
+            },
             WindowEvent::KeyboardInput {
                 event:
                     KeyEvent {
@@ -66,15 +79,22 @@ async fn execute_event_loop(event_loop: EventLoop<Chip8Event>, window: Window) {
                     KeyCode::KeyX => Some(0x0),
                     KeyCode::KeyC => Some(0xB),
                     KeyCode::KeyV => Some(0xF),
+                    KeyCode::Space => {
+                        match state  {
+                            true => chip8.send_event(SystemEvent::StartFastForward),
+                            false => chip8.send_event(SystemEvent::StopFastForward),
+                        };
+                        None
+                    }
                     _ => None,
                 } {
-                    chip8.set_key(key, state)
+                    chip8.send_event(SystemEvent::KeyEvent(key, state));
                 }
             },
             _ => (),
         },
         _ => (),
-    });
+    }).unwrap();
 }
 
 pub fn main() {
@@ -82,5 +102,9 @@ pub fn main() {
     event_loop.set_control_flow(ControlFlow::Poll);
     let window = Window::new(&event_loop).expect("Could not create window");
     window.set_title("Chip-8 Emulator");
-    futures::executor::block_on(execute_event_loop(event_loop, window));
+
+    let ep = event_loop.create_proxy();
+    let chip8 = Chip8::new(ep);
+
+    futures::executor::block_on(execute_event_loop(chip8, event_loop, window));
 }

@@ -6,7 +6,7 @@ use std::{
     time::Duration,
 };
 
-use crate::chip8::square_wave::SquareWave;
+use std::f32::consts::TAU;
 
 #[derive(Eq, PartialEq, Copy, Clone, Debug)]
 pub enum AudioEvent {
@@ -30,13 +30,13 @@ impl Buzzer {
     }
 
     fn event_handler(rx: Receiver<AudioEvent>) {
+        let sound = SquareWave::new(261.60).amplify(0.1);
+        let (_stream, stream_handle) = OutputStream::try_default().unwrap();
         loop {
             match rx.recv() {
                 Ok(AudioEvent::Play(d)) => {
-                    let sound = SquareWave::new(261.60).amplify(0.1);
-                    let (_stream, stream_handle) = OutputStream::try_default().unwrap();
-                    let sound = sound.take_duration(d);
-                    let _ = stream_handle.play_raw(sound);
+                    let sound = sound.clone().take_duration(d);
+                    stream_handle.play_raw(sound).unwrap();
                     thread::sleep(d);
                 }
                 Ok(AudioEvent::Terminate) => break,
@@ -53,5 +53,59 @@ impl Buzzer {
 impl Drop for Buzzer {
     fn drop(&mut self) {
         self.exit();
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SquareWave {
+    freq: f32,
+    n_samples: usize,
+    sample_rate: u32,
+}
+
+impl SquareWave {
+    pub fn new(freq: f32) -> SquareWave {
+        SquareWave {
+            freq,
+            ..Default::default()
+        }
+    }
+}
+
+impl Default for SquareWave {
+    fn default() -> Self {
+        Self {
+            freq: 440.0,
+            n_samples: 0,
+            sample_rate: 44100,
+        }
+    }
+}
+
+impl Iterator for SquareWave {
+    type Item = f32;
+
+    fn next(&mut self) -> Option<f32> {
+        self.n_samples = self.n_samples.wrapping_add(1);
+        let value = TAU * self.freq * (self.n_samples as f32 / self.sample_rate as f32);
+        Some(value.sin().signum())
+    }
+}
+
+impl Source for SquareWave {
+    fn current_frame_len(&self) -> Option<usize> {
+        None
+    }
+
+    fn channels(&self) -> u16 {
+        1
+    }
+
+    fn sample_rate(&self) -> u32 {
+        self.sample_rate
+    }
+
+    fn total_duration(&self) -> Option<Duration> {
+        None
     }
 }
