@@ -4,8 +4,8 @@ use super::buzzer::Buzzer;
 use super::keyboard::Keyboard;
 use super::screen::{Screen, ScreenBuffer};
 use super::stack::Stack;
+use anyhow::Error;
 use rand::Rng;
-use std::error::Error;
 use std::fmt;
 use std::time::Duration;
 
@@ -19,7 +19,7 @@ impl fmt::Display for CPUError {
         write!(f, "Chip8Error")
     }
 }
-impl Error for CPUError {}
+impl std::error::Error for CPUError {}
 
 const ENTRY_POINT: u16 = 0x200;
 pub const CLK_SPEED_HZ: f32 = 500.0;
@@ -29,7 +29,7 @@ pub struct Cpu {
     buzzer: Buzzer,
     kb: Keyboard,
     stack: Stack,
-    halt: bool,
+    kb_halt_reg: Option<usize>,
     ram: [u8; 4096],
     reg: [u8; 16],
     dt: u8,
@@ -56,7 +56,7 @@ impl Cpu {
             kb: Keyboard::default(),
             ram,
             reg: [0; 16],
-            halt: false,
+            kb_halt_reg: None,
             dt: 0,
             st: 0,
             i: 0,
@@ -64,7 +64,7 @@ impl Cpu {
         }
     }
 
-    pub fn execute_instruction(&mut self, i: u16) -> Result<Chip8Event, Box<dyn Error>> {
+    pub fn execute_instruction(&mut self, i: u16) -> Result<Chip8Event, Error> {
         #[cfg(feature = "trace")]
         println!("{:?}", self);
         let [b, kk] = i.to_be_bytes();
@@ -192,12 +192,7 @@ impl Cpu {
             0xF00A..=0xFF0A if i & 0x00FF == 0x0A => {
                 #[cfg(feature = "kb_debug")]
                 println!("Halting for key press {:X}", x);
-                if !self.halt {
-                    self.halt = true;
-                    return Ok(Chip8Event::DoNotIncrementPC);
-                } else {
-                    self.reg[x] = self.kb.last_pressed();
-                }
+                return Ok(Chip8Event::KBHaltOnBuffer(x));
             }
             //LD DT, Vx
             0xF00A..=0xFF15 if i & 0x00FF == 0x15 => self.dt = vx?,
@@ -255,19 +250,11 @@ impl Cpu {
         self.pc += 2;
     }
 
-    // pub fn screen_update(&mut self) {
-    //     self.dt = self.dt.saturating_sub(1);
-    //     self.st = self.st.saturating_sub(1);
-    //     self.tx
-    //         .send_event(Chip8Event::RequestRedraw(self.get_display_buffer().into()))
-    //         .unwrap();
-    // }
-
     pub fn update(&mut self) -> Option<Chip8Event> {
         if let Some(b1) = self.ram.get(self.pc as usize).map(|&e| e as u16)
             && let Some(b2) = self.ram.get((self.pc + 1) as usize).map(|&e| e as u16)
         {
-            if self.halt {
+            if self.kb_halt_reg.is_some() {
                 return None;
             }
             let i = b1 << 8 | b2;
@@ -283,12 +270,21 @@ impl Cpu {
                         self.increment_pc();
                         return Some(e);
                     }
+                    Chip8Event::KBHaltOnBuffer(x) => {
+                        self.kb_halt_reg = Some(x);
+                        self.increment_pc()
+                    }
                     Chip8Event::Shutdown => return Some(e),
                 },
                 Err(_) => return Some(Chip8Event::Shutdown),
             }
         }
         None
+    }
+
+    pub fn update_timers(&mut self) {
+        self.dt = self.dt.saturating_sub(1);
+        self.st = self.st.saturating_sub(1);
     }
 
     pub fn set_key(&mut self, key: u8, state: bool) {
@@ -300,10 +296,14 @@ impl Cpu {
 
     fn press_key(&mut self, key: u8) {
         self.kb.press_key(key as usize);
-        self.halt = false;
         #[cfg(feature = "kb_debug")]
-        if self.halt {
+        if self.kb_halt_reg.is_some() {
             println!("Unhalted");
+        }
+
+        if let Some(x) = self.kb_halt_reg {
+            self.reg[x] = self.kb.last_pressed();
+            self.kb_halt_reg = None;
         }
     }
 

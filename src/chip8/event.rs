@@ -4,6 +4,7 @@ use super::screen::ScreenBuffer;
 pub enum Chip8Event {
     None,
     RequestRedraw(Box<ScreenBuffer>),
+    KBHaltOnBuffer(usize),
     SkipNextInstruction,
     DoNotIncrementPC,
     Shutdown,

@@ -17,6 +17,7 @@ bytemuck = {version = "1.14.0", features = ["derive"]}
 rodio = "0.17.3"
 futures = "0.3.30"
 rand = "0.8.5"
+anyhow = "1.0.79"
 
 [dependencies.image]
 version = "0.24"

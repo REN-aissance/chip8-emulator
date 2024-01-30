@@ -5,7 +5,10 @@ mod keyboard;
 pub(crate) mod screen;
 mod stack;
 
-use self::{cpu::{Cpu, CLK_SPEED_HZ}, event::Chip8Event};
+use self::{
+    cpu::{Cpu, CLK_SPEED_HZ},
+    event::Chip8Event,
+};
 use crate::SystemEvent;
 use std::{
     sync::mpsc::{self, Sender},
@@ -23,7 +26,7 @@ pub struct Chip8 {
 
 impl Chip8 {
     pub fn new(sys_tx: EventLoopProxy<Chip8Event>) -> Chip8 {
-        let mut chip8 = Cpu::new().with_rom(include_bytes!("../roms/BLINKY"));
+        let mut chip8 = Cpu::new().with_rom(include_bytes!("../roms/pumpkindressup.ch8"));
         let mut clock_speed = CLK_SPEED_HZ;
         let (tx, rx) = mpsc::channel();
         let thread_handle = thread::spawn(move || loop {
@@ -35,6 +38,7 @@ impl Chip8 {
                 }
                 Ok(SystemEvent::StartFastForward) => clock_speed = FF_SPEED_HZ,
                 Ok(SystemEvent::StopFastForward) => clock_speed = CLK_SPEED_HZ,
+                Ok(SystemEvent::UpdateTimer) => chip8.update_timers(),
                 _ => (),
             }
             if let Some(e) = chip8.update() {
@@ -53,6 +57,6 @@ impl Chip8 {
     }
 
     pub fn send_event(&self, e: SystemEvent) {
-        self.tx.send(e).expect("Error sending event to Chip-8");
+        let _ = self.tx.send(e);
     }
 }
