@@ -1,4 +1,5 @@
 #![feature(let_chains)]
+#![feature(get_many_mut)]
 
 use std::{thread, time::Duration};
 

@@ -187,7 +187,8 @@ impl Cpu {
             0xE09E..=0xEF9E if i & 0x00FF == 0x9E => {
                 #[cfg(feature = "kb_debug")]
                 println!("Checking for key press {:X}", x);
-                if self.kb.is_pressed(vx as usize) {
+                if self.kb.is_pressed((vx & 0xF) as usize) {
+                    //Mask vx so it is valid
                     return Ok(Chip8Event::SkipNextInstruction);
                 };
             }
@@ -195,7 +196,8 @@ impl Cpu {
             0xE0A1..=0xEFA1 if i & 0x00FF == 0xA1 => {
                 #[cfg(feature = "kb_debug")]
                 println!("Checking key not pressed {:X}", x);
-                if !self.kb.is_pressed(vx as usize) {
+                if !self.kb.is_pressed((vx & 0xF) as usize) {
+                    //Mask vx so it is valid
                     return Ok(Chip8Event::SkipNextInstruction);
                 };
             }
@@ -222,37 +224,42 @@ impl Cpu {
             0xF029..=0xFF29 if i & 0x00FF == 0x29 => self.i = x as u16 * 5,
             //LD B, Vx
             0xF033..=0xFF33 if i & 0x00FF == 0x33 => {
-                self.ram[self.i as usize] = vx / 100;
-                self.ram[(self.i + 1) as usize] = vx / 10 % 10;
-                self.ram[(self.i + 2) as usize] = vx % 10;
+                let i = self.i.saturating_add(i) as usize;
+                if let Ok([b0, b1, b2]) = self.ram.get_many_mut([i, i + 1, i + 2]) {
+                    *b0 = vx / 100;
+                    *b1 = vx / 10 % 10;
+                    *b2 = vx % 10;
+                } else {
+                    // return Err(CPUError.into());
+                }
             }
             //LD [I], Vx
             0xF055..=0xFF55 if i & 0x00FF == 0x55 => {
                 (0..=x)
-                    .map(|x| self.reg[x])
+                    .flat_map(|x| self.reg.get(x))
+                    .copied()
                     .enumerate()
-                    .map(|(i, vx)| ((self.i + i as u16) as usize, vx))
                     .for_each(|(i, vx)| {
-                        self.ram[i] = vx;
+                        self.ram[self.i as usize + i] = vx;
                     });
                 self.i += (x + 1) as u16;
             }
             //LD Vx, [I]
             0xF065..=0xFF65 if i & 0x00FF == 0x65 => {
                 (0..=x)
-                    .map(|i| self.ram[(self.i + i as u16) as usize])
+                    .filter_map(|i| self.ram.get(self.i as usize + i))
+                    .copied()
                     .enumerate()
                     .for_each(|(i, vx)| {
                         self.reg[i] = vx;
                     });
                 self.i += (x + 1) as u16;
             }
-            //SYS addr [IGNORE]
-            0x0000..=0x0FFF => (),
+            //Treat blank memory as NOP
+            0x0000 => return Ok(Chip8Event::DoNotIncrementPC),
             _ => {
                 eprintln!(
-                    "ERROR: Unknown opcode 0x{:04X} at 0x{:04X}\n
-                    perhaps program counter ran into working memory?",
+                    "ERROR: Unknown opcode 0x{:04X} at 0x{:04X}\nPerhaps program counter ran into working memory?",
                     i, self.pc
                 );
                 return Err(CPUError.into());
@@ -298,7 +305,7 @@ impl Cpu {
                 Err(_) => return Some(Chip8Event::Shutdown),
             }
         } else {
-            eprintln!("ERROR: END OF MEMORY");
+            eprintln!("ERROR: PROGRAM COUNTER EXCEEDED MAXIMUM SPEC");
             return Some(Chip8Event::Shutdown);
         }
         None
