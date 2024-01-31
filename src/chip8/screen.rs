@@ -32,9 +32,7 @@ impl Screen {
                 intersection |= *lb != t;
 
                 #[cfg(feature = "intersection_debug")]
-                if intersection {
-                    println!("{:08b} {:08b}", *lb, t);
-                }
+                print!("{:08b} {:08b} ", *lb, t);
             }
             //Inserts to the next word (wrapping) if sprite crosses word boundary
             let x = (x + 8) % w; //Wrap screen horizontally
@@ -45,11 +43,11 @@ impl Screen {
                 intersection |= *ub != t;
 
                 #[cfg(feature = "intersection_debug")]
-                if intersection {
-                    println!("{:08b} {:08b}", *ub, t);
-                }
+                println!("{:08b} {:08b}", *ub, t);
             }
         });
+        #[cfg(feature = "intersection_debug")]
+        dbg!(intersection);
         intersection
     }
 

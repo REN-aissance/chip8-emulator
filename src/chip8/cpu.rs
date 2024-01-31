@@ -40,7 +40,7 @@ pub struct Cpu {
 
 impl Cpu {
     pub fn new() -> Cpu {
-        let mut ram = [0_u8; 4096];
+        let mut ram = [0x01_u8; 0x1000];
         TEXT_SPRITES
             .iter()
             .flatten()
@@ -48,6 +48,55 @@ impl Cpu {
             .for_each(|(i, &b)| {
                 ram[i] = b;
             });
+
+        /*
+        //Debug time
+        //Write s1 to V0
+        ram[0x200] = 0x60;
+        ram[0x201] = 0xFF;
+        //Write s2 to V1
+        ram[0x202] = 0x61;
+        ram[0x203] = 0xFF;
+        //Write s3 to V2
+        ram[0x204] = 0x62;
+        ram[0x205] = 0x18;
+        //Write s4 to V3
+        ram[0x206] = 0x63;
+        ram[0x207] = 0x18;
+        //Set I to something
+        ram[0x208] = 0xA5;
+        ram[0x209] = 0x00;
+        //Write Vx to [I]
+        ram[0x20A] = 0xF4;
+        ram[0x20B] = 0x55;
+        //Write posx1 to V0;
+        ram[0x20C] = 0x60;
+        ram[0x20D] = 0x04;
+        //Write posy1 to V1;
+        ram[0x20E] = 0x61;
+        ram[0x20F] = 0x00;
+        //Write posx2 to V2;
+        ram[0x210] = 0x62;
+        ram[0x211] = 0x08;
+        //Write posy2 to V3;
+        ram[0x212] = 0x63;
+        ram[0x213] = 0x01;
+        //Reset I for sprite 1
+        ram[0x214] = 0xA5;
+        ram[0x215] = 0x00;
+        //Draw sprite at I
+        ram[0x216] = 0xD0;
+        ram[0x217] = 0x12;
+        //Reset I for sprite 2
+        ram[0x218] = 0xA5;
+        ram[0x219] = 0x02;
+        //Draw sprite at I
+        ram[0x21A] = 0xD2;
+        ram[0x21B] = 0x32;
+        //Loop
+        ram[0x21C] = 0x12;
+        ram[0x21D] = 0x1C;
+        */
 
         Cpu {
             screen: Screen::default(),
@@ -71,8 +120,8 @@ impl Cpu {
         let x = (b & 0x0F) as usize;
         let y = (kk >> 4) as usize;
         let n = (kk & 0x0F) as usize;
-        let vx = self.reg.get(x).ok_or(CPUError).copied();
-        let vy = self.reg.get(y).ok_or(CPUError).copied();
+        let vx = *self.reg.get(x).unwrap();
+        let vy = *self.reg.get(y).unwrap();
         match i {
             //CLS
             0x00E0 => self.screen.clear(),
@@ -91,63 +140,65 @@ impl Cpu {
             }
             //SE Vx, byte
             0x3000..=0x3FFF => {
-                if vx? == kk {
+                if vx == kk {
                     return Ok(Chip8Event::SkipNextInstruction);
                 }
             }
             //SNE Vx, byte
             0x4000..=0x4FFF => {
-                if vx? != kk {
+                if vx != kk {
                     return Ok(Chip8Event::SkipNextInstruction);
                 }
             }
             //SE
             0x5000..=0x5FF0 if i & 0x000F == 0 => {
-                if vx? == vy? {
+                if vx == vy {
                     return Ok(Chip8Event::SkipNextInstruction);
                 }
             }
             //LD Vx, byte
             0x6000..=0x6FFF => self.reg[x] = kk,
             //ADD Vx, byte
-            0x7000..=0x7FFF => self.reg[x] = vx?.wrapping_add(kk),
+            0x7000..=0x7FFF => self.reg[x] = vx.wrapping_add(kk),
             //LD Vx, Vy
-            0x8000..=0x8FF0 if i & 0x000F == 0 => self.reg[x] = vy?,
+            0x8000..=0x8FF0 if i & 0x000F == 0 => self.reg[x] = vy,
             //OR Vx, Vy
-            0x8000..=0x8FF1 if i & 0x000F == 1 => self.reg[x] |= vy?,
+            0x8000..=0x8FF1 if i & 0x000F == 1 => self.reg[x] |= vy,
             //AND Vx, Vy
-            0x8000..=0x8FF2 if i & 0x000F == 2 => self.reg[x] &= vy?,
+            0x8000..=0x8FF2 if i & 0x000F == 2 => self.reg[x] &= vy,
             //XOR Vx, Vy
-            0x8000..=0x8FF3 if i & 0x000F == 3 => self.reg[x] ^= vy?,
+            0x8000..=0x8FF3 if i & 0x000F == 3 => self.reg[x] ^= vy,
             //ADD Vx, Vy
             0x8000..=0x8FF4 if i & 0x000F == 4 => {
-                let (vx, carry) = vx?.overflowing_add(vy?);
+                let (vx, carry) = vx.overflowing_add(vy);
+                self.reg[0xF] = !carry as u8;
                 self.reg[x] = vx;
-                self.reg[0xF] = carry as u8;
             }
             //SUB Vx, Vy
             0x8000..=0x8FF5 if i & 0x000F == 5 => {
-                self.reg[0xF] = (vx? > vy?) as u8;
-                self.reg[x] = vx?.wrapping_sub(vy?);
+                let (vx, borrow) = vy.overflowing_sub(vx);
+                self.reg[0xF] = !borrow as u8;
+                self.reg[x] = vx;
             }
             //SHR Vx {, Vy}
             0x8000..=0x8FF6 if i & 0x000F == 6 => {
-                self.reg[0xF] = (vx? & 0x01 == 1) as u8;
+                self.reg[0xF] = (vx & 0x01 == 1) as u8;
                 self.reg[x] >>= 1;
             }
             //SUBN Vx, Vy
             0x8000..=0x8FF7 if i & 0x000F == 7 => {
-                self.reg[0xF] = (vy? > vx?) as u8;
-                self.reg[x] = vy?.wrapping_sub(vx?);
+                let (vx, borrow) = vx.overflowing_sub(vy);
+                self.reg[0xF] = !borrow as u8;
+                self.reg[x] = vx;
             }
             //SHL Vx {, Vy}
             0x8000..=0x8FFE if i & 0x000F == 0xE => {
-                self.reg[0xF] = (vx? & 0x80 == 0x80) as u8;
+                self.reg[0xF] = (vx & 0x80 == 0x80) as u8;
                 self.reg[x] <<= 1;
             }
             //SNE Vx, Vy
             0x9000..=0x9FF0 if i & 0x000F == 0 => {
-                if vx? != vy? {
+                if vx != vy {
                     return Ok(Chip8Event::SkipNextInstruction);
                 }
             }
@@ -167,7 +218,7 @@ impl Cpu {
             0xD000..=0xDFFF => {
                 let i = self.i as usize;
                 let sprite = &self.ram[i..(i + n)];
-                self.screen.print_sprite(sprite, vx?, vy?);
+                self.reg[0xF] = self.screen.print_sprite(sprite, vx, vy) as u8;
                 return Ok(Chip8Event::RequestRedraw(self.get_display_buffer().into()));
             }
             //SKP Vx
@@ -195,21 +246,23 @@ impl Cpu {
                 return Ok(Chip8Event::KBHaltOnBuffer(x));
             }
             //LD DT, Vx
-            0xF00A..=0xFF15 if i & 0x00FF == 0x15 => self.dt = vx?,
+            0xF00A..=0xFF15 if i & 0x00FF == 0x15 => self.dt = vx,
             //LD ST, Vx
             0xF00A..=0xFF18 if i & 0x00FF == 0x18 => {
-                self.buzzer.play(Duration::from_secs_f32(vx? as f32 / 60.0));
-                self.st = vx?;
+                #[cfg(feature = "sound_debug")]
+                println!("Received opcode to play sound");
+                self.buzzer.play(Duration::from_secs_f32(vx as f32 / 60.0));
+                self.st = vx;
             }
             //ADD I, Vx
-            0xF01E..=0xFF1E if i & 0x00FF == 0x1E => self.i = self.i.wrapping_add(vx? as u16),
+            0xF01E..=0xFF1E if i & 0x00FF == 0x1E => self.i = self.i.wrapping_add(vx as u16),
             //LD F, Vx
             0xF029..=0xFF29 if i & 0x00FF == 0x29 => self.i = x as u16 * 5,
             //LD B, Vx
             0xF033..=0xFF33 if i & 0x00FF == 0x33 => {
-                self.ram[self.i as usize] = vx? / 100;
-                self.ram[(self.i + 1) as usize] = vx? / 10 % 10;
-                self.ram[(self.i + 2) as usize] = vx? % 10;
+                self.ram[self.i as usize] = vx / 100;
+                self.ram[(self.i + 1) as usize] = vx / 10 % 10;
+                self.ram[(self.i + 2) as usize] = vx % 10;
             }
             //LD [I], Vx
             0xF055..=0xFF55 if i & 0x00FF == 0x55 => {
@@ -235,7 +288,11 @@ impl Cpu {
             //SYS addr [IGNORE]
             0x0000..=0x0FFF => (),
             _ => {
-                eprintln!("Unknown opcode: {:04x}", i);
+                eprintln!(
+                    "ERROR: Unknown opcode 0x{:04X} at 0x{:04X}\n
+                    perhaps program counter ran into working memory?",
+                    i, self.pc
+                );
                 return Err(CPUError.into());
             }
         }
@@ -278,6 +335,9 @@ impl Cpu {
                 },
                 Err(_) => return Some(Chip8Event::Shutdown),
             }
+        } else {
+            eprintln!("ERROR: END OF MEMORY");
+            return Some(Chip8Event::Shutdown);
         }
         None
     }
@@ -309,10 +369,6 @@ impl Cpu {
 
     fn release_key(&mut self, key: u8) {
         self.kb.release_key(key as usize)
-    }
-
-    pub fn sound_test(&self, d: Duration) {
-        self.buzzer.play(d);
     }
 
     pub fn with_rom(mut self, bytes: &[u8]) -> Self {
@@ -358,8 +414,8 @@ impl fmt::Debug for Cpu {
                 })
                 .trim_end_matches('|'),
             self.dt,
-            self.ram[self.pc as usize >> 4],
-            self.ram[self.pc as usize & 0xF]
+            self.ram[self.pc as usize],
+            self.ram[(self.pc + 1) as usize]
         )
     }
 }

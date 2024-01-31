@@ -19,7 +19,7 @@ pub const ASPECT_RATIO: f32 = 4.0 / 3.0;
 pub const WIDTH: usize = 64;
 pub const HEIGHT: usize = 32;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 enum SystemEvent {
     CloseRequested,
     KeyEvent(u8, bool),
@@ -37,6 +37,9 @@ async fn execute_event_loop(chip8: Chip8, event_loop: EventLoop<Chip8Event>, win
     event_loop.run(|event, event_target| match event {
         Event::UserEvent(Chip8Event::RequestRedraw(buffer)) => {
             screen_buffer = buffer;
+        }
+        Event::UserEvent(Chip8Event::Shutdown) => {
+            event_target.exit();
         }
         Event::AboutToWait => {
             window.request_redraw()

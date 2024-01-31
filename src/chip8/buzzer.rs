@@ -35,6 +35,8 @@ impl Buzzer {
         loop {
             match rx.recv() {
                 Ok(AudioEvent::Play(d)) => {
+                    #[cfg(feature = "sound_debug")]
+                    println!("Attempting to play sound for {}ms", d.as_millis());
                     let sound = sound.clone().take_duration(d);
                     stream_handle.play_raw(sound).unwrap();
                     thread::sleep(d);

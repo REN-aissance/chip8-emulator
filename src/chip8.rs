@@ -13,11 +13,11 @@ use crate::SystemEvent;
 use std::{
     sync::mpsc::{self, Sender},
     thread::{self, JoinHandle},
-    time::Duration,
+    time::{Duration, Instant},
 };
 use winit::event_loop::EventLoopProxy;
 
-const FF_SPEED_HZ: f32 = CLK_SPEED_HZ * 8.0;
+const FF_SPEED_HZ: f32 = CLK_SPEED_HZ * 32.0;
 
 pub struct Chip8 {
     _thread_handle: JoinHandle<()>,
@@ -26,29 +26,33 @@ pub struct Chip8 {
 
 impl Chip8 {
     pub fn new(sys_tx: EventLoopProxy<Chip8Event>) -> Chip8 {
-        let mut chip8 = Cpu::new().with_rom(include_bytes!("../roms/pumpkindressup.ch8"));
+        let mut cpu = Cpu::new().with_rom(include_bytes!("../roms/pumpkindressup.ch8"));
         let mut clock_speed = CLK_SPEED_HZ;
         let (tx, rx) = mpsc::channel();
         let thread_handle = thread::spawn(move || loop {
+            let dt = Instant::now();
+            //This does not seem to drop any events. Causes input lag at clock speed < 60HZ
             match rx.try_recv() {
                 Ok(SystemEvent::CloseRequested) => break,
-                Ok(SystemEvent::KeyEvent(key, state)) => {
-                    chip8.sound_test(Duration::from_millis(200));
-                    chip8.set_key(key, state)
-                }
+                Ok(SystemEvent::KeyEvent(key, state)) => cpu.set_key(key, state),
                 Ok(SystemEvent::StartFastForward) => clock_speed = FF_SPEED_HZ,
                 Ok(SystemEvent::StopFastForward) => clock_speed = CLK_SPEED_HZ,
-                Ok(SystemEvent::UpdateTimer) => chip8.update_timers(),
+                Ok(SystemEvent::UpdateTimer) => {
+                    cpu.update_timers();
+                }
                 _ => (),
             }
-            if let Some(e) = chip8.update() {
+            if let Some(e) = cpu.update() {
                 match e {
                     Chip8Event::RequestRedraw(_) => sys_tx.send_event(e).unwrap(),
-                    Chip8Event::Shutdown => break,
+                    Chip8Event::Shutdown => {
+                        sys_tx.send_event(e).unwrap();
+                        break;
+                    }
                     _ => (),
                 }
             }
-            thread::sleep(Duration::from_secs_f32(1.0 / clock_speed))
+            thread::sleep(Duration::from_secs_f32(1.0 / clock_speed).saturating_sub(dt.elapsed()));
         });
         Chip8 {
             _thread_handle: thread_handle,

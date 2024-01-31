@@ -8,6 +8,7 @@ edition = "2021"
 kb_debug = []
 trace = []
 intersection_debug = []
+sound_debug = []
 
 
 [dependencies]
@@ -25,4 +26,5 @@ default-features = false
 features = ["pnm"]
 
 [profile.release]
-opt-level = 's'
+panic = "abort"
+opt_level = "s"
