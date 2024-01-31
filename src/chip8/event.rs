@@ -2,7 +2,7 @@ use super::screen::ScreenBuffer;
 
 #[derive(Clone, Debug)]
 pub enum Chip8Event {
-    None,
+    IncrementPC,
     RequestRedraw(Box<ScreenBuffer>),
     KBHaltOnBuffer(usize),
     SkipNextInstruction,

@@ -6,6 +6,9 @@ pub struct Stack {
 
 impl Stack {
     pub fn push(&mut self, data: u16) {
+        if self.sp == 16 {
+            panic!("Chip-8 internal stack overflow");
+        }
         *self.contents.get_mut(self.sp).unwrap() = data;
         self.sp += 1;
     }

@@ -13,10 +13,20 @@ use std::time::Duration;
 use std::fmt::Write;
 
 #[derive(Debug, Copy, Clone)]
-pub struct CPUError;
+pub enum CPUError {
+    UnknownOpcode(u16, u16),
+    RamOutOfBounds,
+}
+
 impl fmt::Display for CPUError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Chip8Error")
+        match self {
+            CPUError::UnknownOpcode(i, pc) => write!(f,
+                "ERROR: Unknown opcode 0x{:04X} at 0x{:04X}\nPerhaps program counter ran into working memory?",
+                i, pc
+            ),
+            CPUError::RamOutOfBounds => write!(f, "ERROR: Ran out of RAM"),
+        }
     }
 }
 impl std::error::Error for CPUError {}
@@ -70,202 +80,210 @@ impl Cpu {
         let [b, kk] = i.to_be_bytes();
         let x = (b & 0x0F) as usize;
         let y = (kk >> 4) as usize;
-        let n = (kk & 0x0F) as usize;
+        let n = kk & 0x0F;
         let vx = *self.reg.get(x).unwrap();
         let vy = *self.reg.get(y).unwrap();
         match i {
-            //CLS
+            //00E0 CLS
             0x00E0 => self.screen.clear(),
-            //RET
+            //00EE RET
             0x00EE => self.pc = self.stack.pop(),
-            //JP addr
+            //1nnn JP addr
             0x1000..=0x1FFF => {
                 self.pc = i & 0x0FFF;
                 return Ok(Chip8Event::DoNotIncrementPC);
             }
-            //CALL addr
+            //2nnn CALL addr
             0x2000..=0x2FFF => {
                 self.stack.push(self.pc);
                 self.pc = i & 0x0FFF;
                 return Ok(Chip8Event::DoNotIncrementPC);
             }
-            //SE Vx, byte
+            //3nnn SE Vx, byte
             0x3000..=0x3FFF => {
                 if vx == kk {
                     return Ok(Chip8Event::SkipNextInstruction);
                 }
             }
-            //SNE Vx, byte
+            //4nnn SNE Vx, byte
             0x4000..=0x4FFF => {
                 if vx != kk {
                     return Ok(Chip8Event::SkipNextInstruction);
                 }
             }
-            //SE
+            //5xy0 SE
             0x5000..=0x5FF0 if i & 0x000F == 0 => {
                 if vx == vy {
                     return Ok(Chip8Event::SkipNextInstruction);
                 }
             }
-            //LD Vx, byte
+            //6nnn LD Vx, byte
             0x6000..=0x6FFF => self.reg[x] = kk,
-            //ADD Vx, byte
+            //7nnn ADD Vx, byte
             0x7000..=0x7FFF => self.reg[x] = vx.wrapping_add(kk),
-            //LD Vx, Vy
-            0x8000..=0x8FF0 if i & 0x000F == 0 => self.reg[x] = vy,
-            //OR Vx, Vy
-            0x8000..=0x8FF1 if i & 0x000F == 1 => {
-                self.reg[x] |= vy;
-                self.reg[0xF] = 0;
-            }
-            //AND Vx, Vy
-            0x8000..=0x8FF2 if i & 0x000F == 2 => {
-                self.reg[x] &= vy;
-                self.reg[0xF] = 0;
-            }
-            //XOR Vx, Vy
-            0x8000..=0x8FF3 if i & 0x000F == 3 => {
-                self.reg[x] ^= vy;
-                self.reg[0xF] = 0;
-            }
-            //ADD Vx, Vy
-            0x8000..=0x8FF4 if i & 0x000F == 4 => {
-                let (vx, carry) = vx.overflowing_add(vy);
-                self.reg[x] = vx;
-                self.reg[0xF] = carry as u8;
-            }
-            //SUB Vx, Vy
-            0x8000..=0x8FF5 if i & 0x000F == 5 => {
-                let (vx, borrow) = vx.overflowing_sub(vy);
-                self.reg[x] = vx;
-                self.reg[0xF] = !borrow as u8;
-            }
-            //SHR Vx {, Vy}
-            0x8000..=0x8FF6 if i & 0x000F == 6 => {
-                let out_bit = (vy & 0x01 == 1) as u8;
-                self.reg[x] = vy >> 1;
-                self.reg[0xF] = out_bit;
-            }
-            //SUBN Vx, Vy
-            0x8000..=0x8FF7 if i & 0x000F == 7 => {
-                let (vx, borrow) = vy.overflowing_sub(vx);
-                self.reg[x] = vx;
-                self.reg[0xF] = !borrow as u8;
-            }
-            //SHL Vx {, Vy}
-            0x8000..=0x8FFE if i & 0x000F == 0xE => {
-                let out_bit = (vy & 0x80 == 0x80) as u8;
-                self.reg[x] = vy << 1;
-                self.reg[0xF] = out_bit;
-            }
-            //SNE Vx, Vy
-            0x9000..=0x9FF0 if i & 0x000F == 0 => {
+            //8
+            0x8000..=0x8FFF => match n {
+                //8xy0 LD Vx, Vy
+                0x00 => self.reg[x] = vy,
+                //8xy1 OR Vx, Vy
+                0x01 => {
+                    self.reg[x] |= vy;
+                    self.reg[0xF] = 0;
+                }
+                //8xy2 AND Vx, Vy
+                0x02 => {
+                    self.reg[x] &= vy;
+                    self.reg[0xF] = 0;
+                }
+                //8xy3 XOR Vx, Vy
+                0x03 => {
+                    self.reg[x] ^= vy;
+                    self.reg[0xF] = 0;
+                }
+                //8xy4 ADD Vx, Vy
+                0x04 => {
+                    let (vx, carry) = vx.overflowing_add(vy);
+                    self.reg[x] = vx;
+                    self.reg[0xF] = carry as u8;
+                }
+                //8xy5 SUB Vx, Vy
+                0x05 => {
+                    let (vx, borrow) = vx.overflowing_sub(vy);
+                    self.reg[x] = vx;
+                    self.reg[0xF] = !borrow as u8;
+                }
+                //8xy6 SHR Vx {, Vy}
+                0x06 => {
+                    let out_bit = (vy & 0x01 == 1) as u8;
+                    self.reg[x] = vy >> 1;
+                    self.reg[0xF] = out_bit;
+                }
+                //8xy7 SUBN Vx, Vy
+                0x07 => {
+                    let (vx, borrow) = vy.overflowing_sub(vx);
+                    self.reg[x] = vx;
+                    self.reg[0xF] = !borrow as u8;
+                }
+                //8xyE SHL Vx {, Vy}
+                0x0E => {
+                    let out_bit = (vy & 0x80 == 0x80) as u8;
+                    self.reg[x] = vy << 1;
+                    self.reg[0xF] = out_bit;
+                }
+                _ => return Err(CPUError::UnknownOpcode(i, self.pc).into()),
+            },
+            //9xy0 SNE Vx, Vy
+            0x9000..=0x9FF0 if i & 0xF == 0 => {
                 if vx != vy {
                     return Ok(Chip8Event::SkipNextInstruction);
                 }
             }
-            //LD I, addr
+            //Annn LD I, addr
             0xA000..=0xAFFF => self.i = i & 0x0FFF,
-            //JP V0, addr
+            //Bnnn JP V0, addr
             0xB000..=0xBFFF => {
                 self.pc = (i & 0x0FFF) + self.reg[0x0] as u16;
                 return Ok(Chip8Event::DoNotIncrementPC);
             }
-            //RND Vx, byte
+            //Cnnn RND Vx, byte
             0xC000..=0xCFFF => {
                 let r = rand::thread_rng().gen_range(0x00..=0xFF);
                 self.reg[x] = r & kk;
             }
-            //DRW Vx, Vy, n
+            //Dxyn DRW Vx, Vy, n
             0xD000..=0xDFFF => {
                 let i = self.i as usize;
-                let sprite = &self.ram[i..(i + n)];
+                let sprite = &self.ram[i..(i + n as usize)];
                 self.reg[0xF] = self.screen.print_sprite(sprite, vx, vy) as u8;
                 return Ok(Chip8Event::RequestRedraw(self.get_display_buffer().into()));
             }
-            //SKP Vx
-            0xE09E..=0xEF9E if i & 0x00FF == 0x9E => {
-                #[cfg(feature = "kb_debug")]
-                println!("Checking for key press {:X}", x);
-                if self.kb.is_pressed((vx & 0xF) as usize) {
-                    //Mask vx so it is valid
-                    return Ok(Chip8Event::SkipNextInstruction);
-                };
-            }
-            //SKNP Vx
-            0xE0A1..=0xEFA1 if i & 0x00FF == 0xA1 => {
-                #[cfg(feature = "kb_debug")]
-                println!("Checking key not pressed {:X}", x);
-                if !self.kb.is_pressed((vx & 0xF) as usize) {
-                    //Mask vx so it is valid
-                    return Ok(Chip8Event::SkipNextInstruction);
-                };
-            }
-            //LD Vx, DT
-            0xF007..=0xFF07 if i & 0x00FF == 0x07 => self.reg[x] = self.dt,
-            //LD Vx, K
-            0xF00A..=0xFF0A if i & 0x00FF == 0x0A => {
-                #[cfg(feature = "kb_debug")]
-                println!("Halting for key press {:X}", x);
-                return Ok(Chip8Event::KBHaltOnBuffer(x));
-            }
-            //LD DT, Vx
-            0xF00A..=0xFF15 if i & 0x00FF == 0x15 => self.dt = vx,
-            //LD ST, Vx
-            0xF00A..=0xFF18 if i & 0x00FF == 0x18 => {
-                #[cfg(feature = "sound_debug")]
-                println!("Received opcode to play sound");
-                self.buzzer.play(Duration::from_secs_f32(vx as f32 / 60.0));
-                self.st = vx;
-            }
-            //ADD I, Vx
-            0xF01E..=0xFF1E if i & 0x00FF == 0x1E => self.i = self.i.wrapping_add(vx as u16),
-            //LD F, Vx
-            0xF029..=0xFF29 if i & 0x00FF == 0x29 => self.i = x as u16 * 5,
-            //LD B, Vx
-            0xF033..=0xFF33 if i & 0x00FF == 0x33 => {
-                let i = self.i.saturating_add(i) as usize;
-                if let Ok([b0, b1, b2]) = self.ram.get_many_mut([i, i + 1, i + 2]) {
-                    *b0 = vx / 100;
-                    *b1 = vx / 10 % 10;
-                    *b2 = vx % 10;
-                } else {
-                    // return Err(CPUError.into());
+            //E
+            0xE000..=0xEFFF => match n {
+                //Ex9E SKP Vx
+                0x9E => {
+                    #[cfg(feature = "kb_debug")]
+                    println!("Checking for key press {:X}", x);
+                    if self.kb.is_pressed((vx & 0xF) as usize) {
+                        //Mask vx so it is valid
+                        return Ok(Chip8Event::SkipNextInstruction);
+                    };
                 }
-            }
-            //LD [I], Vx
-            0xF055..=0xFF55 if i & 0x00FF == 0x55 => {
-                (0..=x)
-                    .flat_map(|x| self.reg.get(x))
-                    .copied()
-                    .enumerate()
-                    .for_each(|(i, vx)| {
-                        self.ram[self.i as usize + i] = vx;
-                    });
-                self.i += (x + 1) as u16;
-            }
-            //LD Vx, [I]
-            0xF065..=0xFF65 if i & 0x00FF == 0x65 => {
-                (0..=x)
-                    .filter_map(|i| self.ram.get(self.i as usize + i))
-                    .copied()
-                    .enumerate()
-                    .for_each(|(i, vx)| {
-                        self.reg[i] = vx;
-                    });
-                self.i += (x + 1) as u16;
-            }
+                //ExA1 SKNP Vx
+                0xA1 => {
+                    #[cfg(feature = "kb_debug")]
+                    println!("Checking key not pressed {:X}", x);
+                    if !self.kb.is_pressed((vx & 0xF) as usize) {
+                        //Mask vx so it is valid
+                        return Ok(Chip8Event::SkipNextInstruction);
+                    };
+                }
+                _ => return Err(CPUError::UnknownOpcode(i, self.pc).into()),
+            },
+            //F
+            0xF000..=0xFFFF => match n {
+                //Fx07 LD Vx, DT
+                0x07 => self.reg[x] = self.dt,
+                //Fx0A LD Vx, K
+                0x0A => {
+                    #[cfg(feature = "kb_debug")]
+                    println!("Halting for key press {:X}", x);
+                    return Ok(Chip8Event::KBHaltOnBuffer(x));
+                }
+                //Fx15 LD DT, Vx
+                0x15 => self.dt = vx,
+                //Fx18 LD ST, Vx
+                0x18 => {
+                    #[cfg(feature = "sound_debug")]
+                    println!("Received opcode to play sound");
+                    self.buzzer.play(Duration::from_secs_f32(vx as f32 / 60.0));
+                    self.st = vx;
+                }
+                //Fx1E ADD I, Vx
+                0x1E => self.i = self.i.wrapping_add(vx as u16),
+                //Fx29 LD F, Vx
+                0x29 => self.i = x as u16 * 5,
+                //Fx33 LD B, Vx
+                0x33 => {
+                    let i = self.i.saturating_add(i) as usize;
+                    if let Ok([b0, b1, b2]) = self.ram.get_many_mut([i, i + 1, i + 2]) {
+                        *b0 = vx / 100;
+                        *b1 = vx / 10 % 10;
+                        *b2 = vx % 10;
+                    } else {
+                        return Err(CPUError::RamOutOfBounds.into());
+                    }
+                }
+                //Fx55 LD [I], Vx
+                0x55 => {
+                    (0..=x)
+                        .flat_map(|x| self.reg.get(x))
+                        .copied()
+                        .enumerate()
+                        .for_each(|(i, vx)| {
+                            self.ram[self.i as usize + i] = vx;
+                        });
+                    self.i += (x + 1) as u16;
+                }
+                //Fx65 LD Vx, [I]
+                0x65 => {
+                    (0..=x)
+                        .filter_map(|i| self.ram.get(self.i as usize + i))
+                        .copied()
+                        .enumerate()
+                        .for_each(|(i, vx)| {
+                            self.reg[i] = vx;
+                        });
+                    self.i += (x + 1) as u16;
+                }
+                _ => return Err(CPUError::UnknownOpcode(i, self.pc).into()),
+            },
             //Treat blank memory as NOP
             0x0000 => return Ok(Chip8Event::DoNotIncrementPC),
             _ => {
-                eprintln!(
-                    "ERROR: Unknown opcode 0x{:04X} at 0x{:04X}\nPerhaps program counter ran into working memory?",
-                    i, self.pc
-                );
-                return Err(CPUError.into());
+                return Err(CPUError::UnknownOpcode(i, self.pc).into());
             }
         }
-        Ok(Chip8Event::None)
+        Ok(Chip8Event::IncrementPC)
     }
 
     pub fn get_display_buffer(&self) -> ScreenBuffer {
@@ -291,7 +309,7 @@ impl Cpu {
                         self.increment_pc();
                     }
                     Chip8Event::DoNotIncrementPC => (),
-                    Chip8Event::None => self.increment_pc(),
+                    Chip8Event::IncrementPC => self.increment_pc(),
                     Chip8Event::RequestRedraw(_) => {
                         self.increment_pc();
                         return Some(e);
@@ -302,10 +320,13 @@ impl Cpu {
                     }
                     Chip8Event::Shutdown => return Some(e),
                 },
-                Err(_) => return Some(Chip8Event::Shutdown),
+                Err(e) => {
+                    eprintln!("{:?}", e);
+                    return Some(Chip8Event::Shutdown);
+                }
             }
         } else {
-            eprintln!("ERROR: PROGRAM COUNTER EXCEEDED MAXIMUM SPEC");
+            eprintln!("{}", CPUError::RamOutOfBounds);
             return Some(Chip8Event::Shutdown);
         }
         None
