@@ -77,10 +77,10 @@ impl Cpu {
     pub fn execute_instruction(&mut self, i: u16) -> Result<Chip8Event, Error> {
         #[cfg(feature = "trace")]
         println!("{:?}", self);
-        let [b, kk] = i.to_be_bytes();
-        let x = (b & 0x0F) as usize;
-        let y = (kk >> 4) as usize;
-        let n = kk & 0x0F;
+        let [ub, lb] = i.to_be_bytes();
+        let x = (ub & 0x0F) as usize;
+        let y = (lb >> 4) as usize;
+        let n = lb & 0x0F;
         let vx = *self.reg.get(x).unwrap();
         let vy = *self.reg.get(y).unwrap();
         match i {
@@ -101,13 +101,13 @@ impl Cpu {
             }
             //3nnn SE Vx, byte
             0x3000..=0x3FFF => {
-                if vx == kk {
+                if vx == lb {
                     return Ok(Chip8Event::SkipNextInstruction);
                 }
             }
             //4nnn SNE Vx, byte
             0x4000..=0x4FFF => {
-                if vx != kk {
+                if vx != lb {
                     return Ok(Chip8Event::SkipNextInstruction);
                 }
             }
@@ -118,9 +118,9 @@ impl Cpu {
                 }
             }
             //6nnn LD Vx, byte
-            0x6000..=0x6FFF => self.reg[x] = kk,
+            0x6000..=0x6FFF => self.reg[x] = lb,
             //7nnn ADD Vx, byte
-            0x7000..=0x7FFF => self.reg[x] = vx.wrapping_add(kk),
+            0x7000..=0x7FFF => self.reg[x] = vx.wrapping_add(lb),
             //8
             0x8000..=0x8FFF => match n {
                 //8xy0 LD Vx, Vy
@@ -188,7 +188,7 @@ impl Cpu {
             //Cnnn RND Vx, byte
             0xC000..=0xCFFF => {
                 let r = rand::thread_rng().gen_range(0x00..=0xFF);
-                self.reg[x] = r & kk;
+                self.reg[x] = r & lb;
             }
             //Dxyn DRW Vx, Vy, n
             0xD000..=0xDFFF => {
@@ -198,7 +198,7 @@ impl Cpu {
                 return Ok(Chip8Event::RequestRedraw(self.get_display_buffer().into()));
             }
             //E
-            0xE000..=0xEFFF => match n {
+            0xE000..=0xEFFF => match lb {
                 //Ex9E SKP Vx
                 0x9E => {
                     #[cfg(feature = "kb_debug")]
@@ -217,10 +217,10 @@ impl Cpu {
                         return Ok(Chip8Event::SkipNextInstruction);
                     };
                 }
-                _ => return Err(CPUError::UnknownOpcode(i, self.pc).into()),
+                _ => return Err(CPUError::RamOutOfBounds.into()),
             },
             //F
-            0xF000..=0xFFFF => match n {
+            0xF000..=0xFFFF => match lb {
                 //Fx07 LD Vx, DT
                 0x07 => self.reg[x] = self.dt,
                 //Fx0A LD Vx, K
@@ -244,7 +244,7 @@ impl Cpu {
                 0x29 => self.i = x as u16 * 5,
                 //Fx33 LD B, Vx
                 0x33 => {
-                    let i = self.i.saturating_add(i) as usize;
+                    let i = self.i as usize;
                     if let Ok([b0, b1, b2]) = self.ram.get_many_mut([i, i + 1, i + 2]) {
                         *b0 = vx / 100;
                         *b1 = vx / 10 % 10;
