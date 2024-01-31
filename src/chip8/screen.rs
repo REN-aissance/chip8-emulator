@@ -24,7 +24,8 @@ impl Screen {
             let i = i as u8;
             let word_offset = (x % 8) as u32;
 
-            let y = (y + i) % h; //Wrap screen horizontally
+            let y = y.wrapping_add(i); //Wrapping due to cpu wrapping sub
+                                       // let y = y % h; //Wrap screen horizontally
             if let Some(lb) = self.get_mut(x, y) {
                 let val = val.checked_shr(word_offset).unwrap_or(0);
                 let t = *lb | val;
@@ -35,8 +36,11 @@ impl Screen {
                 print!("{:08b} {:08b} ", *lb, t);
             }
             //Inserts to the next word (wrapping) if sprite crosses word boundary
-            let x = (x + 8) % w; //Wrap screen horizontally
-            if let Some(ub) = self.get_mut(x, y) {
+            let x = x.wrapping_add(8); //Wrapping due to cpu wrapping sub
+                                       // let x = x % w; //Wrap screen horizontally
+            if x < 64
+                && let Some(ub) = self.get_mut(x, y)
+            {
                 let val = val.checked_shl(8 - word_offset).unwrap_or(0);
                 let t = *ub | val;
                 *ub ^= val;
@@ -52,8 +56,12 @@ impl Screen {
     }
 
     fn get_mut(&mut self, x: u8, y: u8) -> Option<&mut u8> {
-        let i = (x as usize / 8) + (y as usize * WIDTH / 8);
-        self.0.get_mut(i)
+        if x >= WIDTH as u8 {
+            None
+        } else {
+            let i = (x as usize / 8) + (y as usize * WIDTH / 8);
+            self.0.get_mut(i)
+        }
     }
 
     pub fn extract_buffer(&self) -> ScreenBuffer {

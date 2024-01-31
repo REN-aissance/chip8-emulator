@@ -22,7 +22,7 @@ impl fmt::Display for CPUError {
 impl std::error::Error for CPUError {}
 
 const ENTRY_POINT: u16 = 0x200;
-pub const CLK_SPEED_HZ: f32 = 500.0;
+pub const CLK_SPEED_HZ: f32 = 660.0;
 
 pub struct Cpu {
     screen: Screen,
@@ -48,55 +48,6 @@ impl Cpu {
             .for_each(|(i, &b)| {
                 ram[i] = b;
             });
-
-        /*
-        //Debug time
-        //Write s1 to V0
-        ram[0x200] = 0x60;
-        ram[0x201] = 0xFF;
-        //Write s2 to V1
-        ram[0x202] = 0x61;
-        ram[0x203] = 0xFF;
-        //Write s3 to V2
-        ram[0x204] = 0x62;
-        ram[0x205] = 0x18;
-        //Write s4 to V3
-        ram[0x206] = 0x63;
-        ram[0x207] = 0x18;
-        //Set I to something
-        ram[0x208] = 0xA5;
-        ram[0x209] = 0x00;
-        //Write Vx to [I]
-        ram[0x20A] = 0xF4;
-        ram[0x20B] = 0x55;
-        //Write posx1 to V0;
-        ram[0x20C] = 0x60;
-        ram[0x20D] = 0x04;
-        //Write posy1 to V1;
-        ram[0x20E] = 0x61;
-        ram[0x20F] = 0x00;
-        //Write posx2 to V2;
-        ram[0x210] = 0x62;
-        ram[0x211] = 0x08;
-        //Write posy2 to V3;
-        ram[0x212] = 0x63;
-        ram[0x213] = 0x01;
-        //Reset I for sprite 1
-        ram[0x214] = 0xA5;
-        ram[0x215] = 0x00;
-        //Draw sprite at I
-        ram[0x216] = 0xD0;
-        ram[0x217] = 0x12;
-        //Reset I for sprite 2
-        ram[0x218] = 0xA5;
-        ram[0x219] = 0x02;
-        //Draw sprite at I
-        ram[0x21A] = 0xD2;
-        ram[0x21B] = 0x32;
-        //Loop
-        ram[0x21C] = 0x12;
-        ram[0x21D] = 0x1C;
-        */
 
         Cpu {
             screen: Screen::default(),
@@ -163,38 +114,49 @@ impl Cpu {
             //LD Vx, Vy
             0x8000..=0x8FF0 if i & 0x000F == 0 => self.reg[x] = vy,
             //OR Vx, Vy
-            0x8000..=0x8FF1 if i & 0x000F == 1 => self.reg[x] |= vy,
+            0x8000..=0x8FF1 if i & 0x000F == 1 => {
+                self.reg[x] |= vy;
+                self.reg[0xF] = 0;
+            }
             //AND Vx, Vy
-            0x8000..=0x8FF2 if i & 0x000F == 2 => self.reg[x] &= vy,
+            0x8000..=0x8FF2 if i & 0x000F == 2 => {
+                self.reg[x] &= vy;
+                self.reg[0xF] = 0;
+            }
             //XOR Vx, Vy
-            0x8000..=0x8FF3 if i & 0x000F == 3 => self.reg[x] ^= vy,
+            0x8000..=0x8FF3 if i & 0x000F == 3 => {
+                self.reg[x] ^= vy;
+                self.reg[0xF] = 0;
+            }
             //ADD Vx, Vy
             0x8000..=0x8FF4 if i & 0x000F == 4 => {
                 let (vx, carry) = vx.overflowing_add(vy);
-                self.reg[0xF] = !carry as u8;
                 self.reg[x] = vx;
+                self.reg[0xF] = carry as u8;
             }
             //SUB Vx, Vy
             0x8000..=0x8FF5 if i & 0x000F == 5 => {
                 let (vx, borrow) = vx.overflowing_sub(vy);
-                self.reg[0xF] = !borrow as u8;
                 self.reg[x] = vx;
+                self.reg[0xF] = !borrow as u8;
             }
             //SHR Vx {, Vy}
             0x8000..=0x8FF6 if i & 0x000F == 6 => {
-                self.reg[0xF] = (vx & 0x01 == 1) as u8;
-                self.reg[x] >>= 1;
+                let out_bit = (vy & 0x01 == 1) as u8;
+                self.reg[x] = vy >> 1;
+                self.reg[0xF] = out_bit;
             }
             //SUBN Vx, Vy
             0x8000..=0x8FF7 if i & 0x000F == 7 => {
                 let (vx, borrow) = vy.overflowing_sub(vx);
-                self.reg[0xF] = !borrow as u8;
                 self.reg[x] = vx;
+                self.reg[0xF] = !borrow as u8;
             }
             //SHL Vx {, Vy}
             0x8000..=0x8FFE if i & 0x000F == 0xE => {
-                self.reg[0xF] = (vx & 0x80 == 0x80) as u8;
-                self.reg[x] <<= 1;
+                let out_bit = (vy & 0x80 == 0x80) as u8;
+                self.reg[x] = vy << 1;
+                self.reg[0xF] = out_bit;
             }
             //SNE Vx, Vy
             0x9000..=0x9FF0 if i & 0x000F == 0 => {
@@ -225,7 +187,7 @@ impl Cpu {
             0xE09E..=0xEF9E if i & 0x00FF == 0x9E => {
                 #[cfg(feature = "kb_debug")]
                 println!("Checking for key press {:X}", x);
-                if self.kb.is_pressed(x) {
+                if self.kb.is_pressed(vx as usize) {
                     return Ok(Chip8Event::SkipNextInstruction);
                 };
             }
@@ -233,7 +195,7 @@ impl Cpu {
             0xE0A1..=0xEFA1 if i & 0x00FF == 0xA1 => {
                 #[cfg(feature = "kb_debug")]
                 println!("Checking key not pressed {:X}", x);
-                if !self.kb.is_pressed(x) {
+                if !self.kb.is_pressed(vx as usize) {
                     return Ok(Chip8Event::SkipNextInstruction);
                 };
             }
@@ -269,7 +231,7 @@ impl Cpu {
                 (0..=x)
                     .map(|x| self.reg[x])
                     .enumerate()
-                    .map(|(i, vx)| (self.i as usize + i, vx))
+                    .map(|(i, vx)| ((self.i + i as u16) as usize, vx))
                     .for_each(|(i, vx)| {
                         self.ram[i] = vx;
                     });
@@ -278,7 +240,7 @@ impl Cpu {
             //LD Vx, [I]
             0xF065..=0xFF65 if i & 0x00FF == 0x65 => {
                 (0..=x)
-                    .map(|i| self.ram[self.i as usize + i])
+                    .map(|i| self.ram[(self.i + i as u16) as usize])
                     .enumerate()
                     .for_each(|(i, vx)| {
                         self.reg[i] = vx;
@@ -356,6 +318,14 @@ impl Cpu {
 
     fn press_key(&mut self, key: u8) {
         self.kb.press_key(key as usize);
+
+        if self.kb_halt_reg.is_some() {
+            self.buzzer.play(Duration::from_millis(200));
+        }
+    }
+
+    fn release_key(&mut self, key: u8) {
+        self.kb.release_key(key as usize);
         #[cfg(feature = "kb_debug")]
         if self.kb_halt_reg.is_some() {
             println!("Unhalted");
@@ -365,10 +335,6 @@ impl Cpu {
             self.reg[x] = self.kb.last_pressed();
             self.kb_halt_reg = None;
         }
-    }
-
-    fn release_key(&mut self, key: u8) {
-        self.kb.release_key(key as usize)
     }
 
     pub fn with_rom(mut self, bytes: &[u8]) -> Self {

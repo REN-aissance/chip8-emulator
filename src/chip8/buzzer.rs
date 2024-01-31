@@ -14,6 +14,7 @@ pub enum AudioEvent {
     Terminate,
 }
 
+//TODO Rework this ENTIRELY so it uses a play/pause mechanism
 pub struct Buzzer {
     tx: Sender<AudioEvent>,
 }

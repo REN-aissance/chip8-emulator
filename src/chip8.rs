@@ -26,7 +26,7 @@ pub struct Chip8 {
 
 impl Chip8 {
     pub fn new(sys_tx: EventLoopProxy<Chip8Event>) -> Chip8 {
-        let mut cpu = Cpu::new().with_rom(include_bytes!("../roms/TEST_CORAX"));
+        let mut cpu = Cpu::new().with_rom(include_bytes!("../roms/oob_test_2.ch8"));
         let mut clock_speed = CLK_SPEED_HZ;
         let (tx, rx) = mpsc::channel();
         let thread_handle = thread::spawn(move || loop {

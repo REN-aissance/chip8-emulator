@@ -87,6 +87,7 @@ async fn execute_event_loop(chip8: Chip8, event_loop: EventLoop<Chip8Event>, win
     }).unwrap();
 }
 
+//FIXME This is disgusting
 fn handle_chip8_input(state: ElementState, keycode: KeyCode, chip8: &Chip8) {
     let state = match state {
         ElementState::Pressed => true,
@@ -128,6 +129,7 @@ pub fn main() {
     let window = Window::new(&event_loop).expect("Could not create window");
     window.set_title("Chip-8 Emulator");
 
+    //TODO Swap out this terribly overengineered multi-threading for IPF
     let ep = event_loop.create_proxy();
     let chip8 = Chip8::new(ep);
 
