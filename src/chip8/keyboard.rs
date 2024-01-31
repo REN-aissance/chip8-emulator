@@ -17,6 +17,8 @@ impl Keyboard {
     }
 
     pub fn release_key(&mut self, key: usize) {
+        #[cfg(feature = "kb_debug")]
+        eprintln!("Key released! {:0X}", key);
         self.pressed_keys[key] = false;
     }
 

@@ -40,7 +40,7 @@ pub struct Cpu {
 
 impl Cpu {
     pub fn new() -> Cpu {
-        let mut ram = [0x01_u8; 0x1000];
+        let mut ram = [0x00_u8; 0x1000];
         TEXT_SPRITES
             .iter()
             .flatten()
@@ -104,7 +104,7 @@ impl Cpu {
             stack: Stack::default(),
             kb: Keyboard::default(),
             ram,
-            reg: [0; 16],
+            reg: [0x00; 16],
             kb_halt_reg: None,
             dt: 0,
             st: 0,
@@ -176,7 +176,7 @@ impl Cpu {
             }
             //SUB Vx, Vy
             0x8000..=0x8FF5 if i & 0x000F == 5 => {
-                let (vx, borrow) = vy.overflowing_sub(vx);
+                let (vx, borrow) = vx.overflowing_sub(vy);
                 self.reg[0xF] = !borrow as u8;
                 self.reg[x] = vx;
             }
@@ -187,7 +187,7 @@ impl Cpu {
             }
             //SUBN Vx, Vy
             0x8000..=0x8FF7 if i & 0x000F == 7 => {
-                let (vx, borrow) = vx.overflowing_sub(vy);
+                let (vx, borrow) = vy.overflowing_sub(vx);
                 self.reg[0xF] = !borrow as u8;
                 self.reg[x] = vx;
             }
