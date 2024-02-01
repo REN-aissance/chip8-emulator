@@ -295,7 +295,6 @@ impl Chip8 {
                             self.ram[self.i as usize + i] = vx;
                         });
                     self.i += (x + 1) as u16;
-                    dbg!(&self.ram[0x500..=0x0503]);
                 }
                 //Fx65 LD Vx, [I]
                 0x65 => {
