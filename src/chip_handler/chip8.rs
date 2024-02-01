@@ -31,7 +31,7 @@ impl fmt::Display for CPUError {
 }
 impl std::error::Error for CPUError {}
 
-const ENTRY_POINT: u16 = 0x200;
+pub const ENTRY_POINT: u16 = 0x200;
 
 pub struct Chip8 {
     screen: Screen,
