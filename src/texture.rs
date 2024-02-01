@@ -6,7 +6,7 @@ use wgpu::{
     TextureUsages, TextureView, TextureViewDescriptor,
 };
 
-use crate::{chip8::screen::ScreenBuffer, HEIGHT, WIDTH};
+use crate::{HEIGHT, WIDTH};
 
 pub struct Texture {
     pub texture: wgpu::Texture,
@@ -18,11 +18,12 @@ impl Texture {
     pub fn from_bytes(
         device: &Device,
         queue: &Queue,
-        buffer: ScreenBuffer,
+        bytes: &[u8],
     ) -> Result<Self, Box<dyn Error>> {
-        let header: Vec<u8> = format!("P4 {} {}\n", WIDTH, HEIGHT).as_bytes().to_vec();
+        let header_string = format!("P4 {} {}\n", WIDTH, HEIGHT);
+        let header: &[u8] = header_string.as_bytes();
         //Mapped NOT due to the specifications of pbm format
-        let file = [header, buffer.map(|e| !e).to_vec()].concat();
+        let file = [header, &bytes.iter().map(|e| !e).collect::<Vec<_>>()].concat();
 
         let img = image::load_from_memory_with_format(&file, ImageFormat::Pnm)?;
         Self::from_image(device, queue, &img)

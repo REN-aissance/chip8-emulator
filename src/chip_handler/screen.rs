@@ -1,19 +1,21 @@
+use std::{cell::RefCell, rc::Rc};
+
 use crate::{HEIGHT, WIDTH};
 
 const BUFFER_LEN: usize = (WIDTH / 8) * HEIGHT;
-pub type ScreenBuffer = [u8; BUFFER_LEN];
+pub type ScreenBuffer = Rc<RefCell<[u8]>>;
 
 #[repr(transparent)]
 pub struct Screen(ScreenBuffer);
 
 impl Default for Screen {
     fn default() -> Self {
-        Self(Self::CLEAR)
+        Self(Rc::new(RefCell::new(Self::CLEAR)))
     }
 }
 
 impl Screen {
-    const CLEAR: [u8; BUFFER_LEN] = [0x00; BUFFER_LEN];
+    const CLEAR: [u8; BUFFER_LEN] = [0x00_u8; BUFFER_LEN];
 
     pub fn print_sprite(&mut self, sprite: &[u8], x: u8, y: u8) -> bool {
         let (w, h) = (WIDTH as u8, HEIGHT as u8);
@@ -26,7 +28,9 @@ impl Screen {
 
             let y = y.wrapping_add(i); //Wrapping due to cpu wrapping sub
                                        // let y = y % h; //Wrap screen horizontally
-            if let Some(lb) = self.get_mut(x, y) {
+            if let Some(i) = Self::fix_index(x, y)
+                && let Some(lb) = self.0.borrow_mut().get_mut(i)
+            {
                 let val = val.checked_shr(word_offset).unwrap_or(0);
                 let t = *lb | val;
                 *lb ^= val;
@@ -39,7 +43,8 @@ impl Screen {
             let x = x.wrapping_add(8); //Wrapping due to cpu wrapping sub
                                        // let x = x % w; //Wrap screen horizontally
             if x < 64
-                && let Some(ub) = self.get_mut(x, y)
+                && let Some(i) = Self::fix_index(x, y)
+                && let Some(ub) = self.0.borrow_mut().get_mut(i)
             {
                 let val = val.checked_shl(8 - word_offset).unwrap_or(0);
                 let t = *ub | val;
@@ -55,24 +60,23 @@ impl Screen {
         intersection
     }
 
-    fn get_mut(&mut self, x: u8, y: u8) -> Option<&mut u8> {
+    fn fix_index(x: u8, y: u8) -> Option<usize> {
         if x >= WIDTH as u8 {
             None
         } else {
-            let i = (x as usize / 8) + (y as usize * WIDTH / 8);
-            self.0.get_mut(i)
+            Some((x as usize / 8) + (y as usize * WIDTH / 8))
         }
     }
 
     pub fn extract_buffer(&self) -> ScreenBuffer {
-        self.0
+        self.0.clone()
     }
 
     pub fn clear(&mut self) {
-        self.0 = Self::CLEAR;
+        self.0 = Rc::new(RefCell::new(Self::CLEAR));
     }
 
     pub fn default_buffer() -> ScreenBuffer {
-        Self::CLEAR
+        Rc::new(RefCell::new(Self::CLEAR))
     }
 }

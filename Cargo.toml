@@ -9,6 +9,7 @@ kb_debug = []
 trace = []
 intersection_debug = []
 sound_debug = []
+kb_trace = []
 
 
 [dependencies]

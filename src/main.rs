@@ -1,9 +1,7 @@
 #![feature(let_chains)]
 #![feature(get_many_mut)]
 
-use std::{thread, time::Duration};
-
-use chip8::{event::Chip8Event, screen::Screen, Chip8};
+use chip_handler::{event::Chip8Event, ChipHandler};
 use render::Renderer;
 use winit::{
     event::{ElementState, Event, KeyEvent, WindowEvent},
@@ -14,46 +12,34 @@ use winit::{
 
 mod render;
 mod texture;
-mod chip8;
+mod chip_handler;
 
 pub const ASPECT_RATIO: f32 = 4.0 / 3.0;
 pub const WIDTH: usize = 64;
 pub const HEIGHT: usize = 32;
 
-#[derive(Debug, PartialEq, Eq)]
-enum SystemEvent {
-    CloseRequested,
-    KeyEvent(u8, bool),
-    StartFastForward,
-    StopFastForward,
-    UpdateTimer,
-}
-unsafe impl Send for SystemEvent {}
-unsafe impl Sync for SystemEvent {}
-
-async fn execute_event_loop(chip8: Chip8, event_loop: EventLoop<Chip8Event>, window: Window) {
+async fn execute_event_loop(event_loop: EventLoop<Chip8Event>, window: Window) {
     let mut renderer = Renderer::new(&window).await;
-    let mut screen_buffer = Box::new(Screen::default_buffer());
+    let mut chip8 = ChipHandler::new(event_loop.create_proxy());
 
     event_loop.run(|event, event_target| match event {
-        Event::UserEvent(Chip8Event::RequestRedraw(buffer)) => {
-            screen_buffer = buffer;
-        }
         Event::UserEvent(Chip8Event::Shutdown) => {
             event_target.exit();
+        }
+        Event::UserEvent(Chip8Event::RequestRedraw) => {
+            window.request_redraw();
         }
         Event::AboutToWait => {
             window.request_redraw()
         },
         Event::WindowEvent { event, .. } => match event {
             WindowEvent::CloseRequested => {
-                chip8.send_event(SystemEvent::CloseRequested);
                 event_target.exit()
             },
             WindowEvent::Resized(new_size) => renderer.resize(new_size),
             WindowEvent::RedrawRequested => {
-                renderer.update_screen(*screen_buffer);
-                chip8.send_event(SystemEvent::UpdateTimer);
+                chip8.update();
+                renderer.update_screen(&chip8.get_frame_buffer().borrow());
                 renderer.render()
             },
             WindowEvent::KeyboardInput {
@@ -66,14 +52,10 @@ async fn execute_event_loop(chip8: Chip8, event_loop: EventLoop<Chip8Event>, win
                     },
                 ..
             } => {
-                handle_chip8_input(state, keycode, &chip8);
-                
+                handle_chip8_input(state, keycode, &mut chip8);
                 if state == ElementState::Pressed {
                     match (keycode, window.fullscreen()) {
                         (KeyCode::Escape, _,) => {
-                            chip8.send_event(SystemEvent::CloseRequested);
-                            //Prevent ugly error message about closed channel by sleeping
-                            thread::sleep(Duration::from_millis(1));
                             event_target.exit();
                         },
                         (KeyCode::Enter, Some(_)) => window.set_fullscreen(None),
@@ -89,7 +71,7 @@ async fn execute_event_loop(chip8: Chip8, event_loop: EventLoop<Chip8Event>, win
 }
 
 //FIXME This is disgusting
-fn handle_chip8_input(state: ElementState, keycode: KeyCode, chip8: &Chip8) {
+fn handle_chip8_input(state: ElementState, keycode: KeyCode, chip8: &mut ChipHandler) {
     let state = match state {
         ElementState::Pressed => true,
         ElementState::Released => false,
@@ -113,14 +95,14 @@ fn handle_chip8_input(state: ElementState, keycode: KeyCode, chip8: &Chip8) {
         KeyCode::KeyV => Some(0xF),
         KeyCode::Space => {
             match state  {
-                true => chip8.send_event(SystemEvent::StartFastForward),
-                false => chip8.send_event(SystemEvent::StopFastForward),
+                true => chip8.start_ff(),
+                false => chip8.stop_ff(),
             };
             None
         }
         _ => None,
     } {
-        chip8.send_event(SystemEvent::KeyEvent(key, state));
+        chip8.update_key(key, state);
     }
 }
 
@@ -129,10 +111,5 @@ pub fn main() {
     event_loop.set_control_flow(ControlFlow::Poll);
     let window = Window::new(&event_loop).expect("Could not create window");
     window.set_title("Chip-8 Emulator");
-
-    //TODO Swap out this terribly overengineered multi-threading for IPF
-    let ep = event_loop.create_proxy();
-    let chip8 = Chip8::new(ep);
-
-    futures::executor::block_on(execute_event_loop(chip8, event_loop, window));
+    futures::executor::block_on(execute_event_loop(event_loop, window));
 }

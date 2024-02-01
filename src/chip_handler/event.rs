@@ -1,10 +1,8 @@
-use super::screen::ScreenBuffer;
-
 #[derive(Clone, Debug)]
 pub enum Chip8Event {
     IncrementPC,
-    RequestRedraw(Box<ScreenBuffer>),
     KBHaltOnBuffer(usize),
+    RequestRedraw,
     SkipNextInstruction,
     DoNotIncrementPC,
     Shutdown,

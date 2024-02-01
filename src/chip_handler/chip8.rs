@@ -1,4 +1,4 @@
-use crate::chip8::event::Chip8Event;
+use crate::chip_handler::event::Chip8Event;
 
 use super::buzzer::Buzzer;
 use super::keyboard::Keyboard;
@@ -32,9 +32,8 @@ impl fmt::Display for CPUError {
 impl std::error::Error for CPUError {}
 
 const ENTRY_POINT: u16 = 0x200;
-pub const CLK_SPEED_HZ: f32 = 660.0;
 
-pub struct Cpu {
+pub struct Chip8 {
     screen: Screen,
     buzzer: Buzzer,
     kb: Keyboard,
@@ -48,8 +47,8 @@ pub struct Cpu {
     pc: u16,
 }
 
-impl Cpu {
-    pub fn new() -> Cpu {
+impl Chip8 {
+    pub fn new() -> Chip8 {
         let mut ram = [0x00_u8; 0x1000];
         TEXT_SPRITES
             .iter()
@@ -59,7 +58,7 @@ impl Cpu {
                 ram[i] = b;
             });
 
-        Cpu {
+        Chip8 {
             screen: Screen::default(),
             buzzer: Buzzer::new(),
             stack: Stack::default(),
@@ -195,25 +194,23 @@ impl Cpu {
                 let i = self.i as usize;
                 let sprite = &self.ram[i..(i + n as usize)];
                 self.reg[0xF] = self.screen.print_sprite(sprite, vx, vy) as u8;
-                return Ok(Chip8Event::RequestRedraw(self.get_display_buffer().into()));
+                return Ok(Chip8Event::RequestRedraw);
             }
             //E
             0xE000..=0xEFFF => match lb {
                 //Ex9E SKP Vx
                 0x9E => {
-                    #[cfg(feature = "kb_debug")]
-                    println!("Checking for key press {:X}", x);
-                    if self.kb.is_pressed((vx & 0xF) as usize) {
-                        //Mask vx so it is valid
+                    // #[cfg(feature = "kb_debug")]
+                    // println!("Checking for key press {:X}", x);
+                    if self.kb.is_pressed(vx as usize) {
                         return Ok(Chip8Event::SkipNextInstruction);
                     };
                 }
                 //ExA1 SKNP Vx
                 0xA1 => {
-                    #[cfg(feature = "kb_debug")]
-                    println!("Checking key not pressed {:X}", x);
-                    if !self.kb.is_pressed((vx & 0xF) as usize) {
-                        //Mask vx so it is valid
+                    // #[cfg(feature = "kb_debug")]
+                    // println!("Checking key not pressed {:X}", x);
+                    if !self.kb.is_pressed(vx as usize) {
                         return Ok(Chip8Event::SkipNextInstruction);
                     };
                 }
@@ -310,15 +307,15 @@ impl Cpu {
                     }
                     Chip8Event::DoNotIncrementPC => (),
                     Chip8Event::IncrementPC => self.increment_pc(),
-                    Chip8Event::RequestRedraw(_) => {
-                        self.increment_pc();
-                        return Some(e);
-                    }
                     Chip8Event::KBHaltOnBuffer(x) => {
                         self.kb_halt_reg = Some(x);
                         self.increment_pc()
                     }
                     Chip8Event::Shutdown => return Some(e),
+                    Chip8Event::RequestRedraw => {
+                        self.increment_pc();
+                        return Some(e);
+                    }
                 },
                 Err(e) => {
                     eprintln!("{:?}", e);
@@ -332,7 +329,7 @@ impl Cpu {
         None
     }
 
-    pub fn update_timers(&mut self) {
+    pub fn decrement_timers(&mut self) {
         self.dt = self.dt.saturating_sub(1);
         self.st = self.st.saturating_sub(1);
     }
@@ -393,7 +390,7 @@ const TEXT_SPRITES: [[u8; 5]; 16] = [
 ];
 
 #[cfg(debug_assertions)]
-impl fmt::Debug for Cpu {
+impl fmt::Debug for Chip8 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
