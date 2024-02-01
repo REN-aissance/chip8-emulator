@@ -5,7 +5,7 @@ use wgpu::{
 };
 use winit::{dpi::PhysicalSize, window::Window};
 
-use crate::{chip_handler::screen::Screen, texture::Texture, ASPECT_RATIO};
+use crate::{chip8::screen::Screen, texture::Texture, ASPECT_RATIO};
 
 pub struct Renderer<'a> {
     size: PhysicalSize<u32>,

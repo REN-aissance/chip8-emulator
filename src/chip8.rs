@@ -1,16 +1,20 @@
-use crate::chip_handler::event::Chip8Event;
+mod buzzer;
+pub(crate) mod event;
+mod keyboard;
+pub(crate) mod screen;
+mod stack;
 
-use super::buzzer::Buzzer;
-use super::keyboard::Keyboard;
-use super::screen::{Screen, ScreenBuffer};
-use super::stack::Stack;
+use self::buzzer::Buzzer;
+use self::keyboard::Keyboard;
+use self::screen::{Screen, ScreenBuffer};
+use self::stack::Stack;
+use crate::chip8::event::Chip8Event;
 use anyhow::Error;
 use rand::Rng;
 use std::fmt;
-use std::time::Duration;
-
 #[cfg(debug_assertions)]
 use std::fmt::Write;
+use std::time::Duration;
 
 #[derive(Debug, Copy, Clone)]
 pub enum CPUError {
@@ -73,7 +77,30 @@ impl Chip8 {
         }
     }
 
-    pub fn execute_instruction(&mut self, i: u16) -> Result<Chip8Event, Error> {
+    pub fn with_rom(mut self, bytes: &[u8]) -> Self {
+        bytes.iter().enumerate().for_each(|(i, &b)| {
+            self.ram[ENTRY_POINT as usize + i] = b;
+        });
+        self
+    }
+
+    pub fn get_display_buffer(&self) -> ScreenBuffer {
+        self.screen.extract_buffer()
+    }
+
+    pub fn decrement_timers(&mut self) {
+        self.dt = self.dt.saturating_sub(1);
+        self.st = self.st.saturating_sub(1);
+    }
+
+    pub fn set_key(&mut self, key: u8, state: bool) {
+        match state {
+            true => self.press_key(key),
+            false => self.release_key(key),
+        }
+    }
+
+    fn execute_instruction(&mut self, i: u16) -> Result<Chip8Event, Error> {
         #[cfg(feature = "trace")]
         println!("{:?}", self);
         let [ub, lb] = i.to_be_bytes();
@@ -283,14 +310,6 @@ impl Chip8 {
         Ok(Chip8Event::IncrementPC)
     }
 
-    pub fn get_display_buffer(&self) -> ScreenBuffer {
-        self.screen.extract_buffer()
-    }
-
-    pub fn increment_pc(&mut self) {
-        self.pc += 2;
-    }
-
     pub fn update(&mut self) -> Option<Chip8Event> {
         if let Some(b1) = self.ram.get(self.pc as usize).map(|&e| e as u16)
             && let Some(b2) = self.ram.get((self.pc + 1) as usize).map(|&e| e as u16)
@@ -329,16 +348,8 @@ impl Chip8 {
         None
     }
 
-    pub fn decrement_timers(&mut self) {
-        self.dt = self.dt.saturating_sub(1);
-        self.st = self.st.saturating_sub(1);
-    }
-
-    pub fn set_key(&mut self, key: u8, state: bool) {
-        match state {
-            true => self.press_key(key),
-            false => self.release_key(key),
-        }
+    fn increment_pc(&mut self) {
+        self.pc += 2;
     }
 
     fn press_key(&mut self, key: u8) {
@@ -360,13 +371,6 @@ impl Chip8 {
             self.reg[x] = self.kb.last_pressed();
             self.kb_halt_reg = None;
         }
-    }
-
-    pub fn with_rom(mut self, bytes: &[u8]) -> Self {
-        bytes.iter().enumerate().for_each(|(i, &b)| {
-            self.ram[ENTRY_POINT as usize + i] = b;
-        });
-        self
     }
 }
 

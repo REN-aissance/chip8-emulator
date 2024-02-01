@@ -3,7 +3,7 @@ use std::{cell::RefCell, rc::Rc};
 use crate::{HEIGHT, WIDTH};
 
 const BUFFER_LEN: usize = (WIDTH / 8) * HEIGHT;
-pub type ScreenBuffer = Rc<RefCell<[u8]>>;
+pub(crate) type ScreenBuffer = Rc<RefCell<[u8]>>;
 
 #[repr(transparent)]
 pub struct Screen(ScreenBuffer);

@@ -1,32 +1,25 @@
-mod buzzer;
-mod chip8;
-pub(crate) mod event;
-mod keyboard;
-pub(crate) mod screen;
-mod stack;
-
-use self::{chip8::Chip8, event::Chip8Event, screen::ScreenBuffer};
 use std::{
     env, fs,
     io::{BufReader, Read},
 };
 use winit::event_loop::EventLoopProxy;
 
-use crate::chip_handler::chip8::ENTRY_POINT;
+use crate::chip8::{event::Chip8Event, screen::ScreenBuffer, Chip8, ENTRY_POINT};
+
 const CPU_IPF: u32 = 15;
 const FF_IPF: u32 = CPU_IPF * 32;
 const MAX_FILESIZE: u64 = 0x1000 - ENTRY_POINT as u64;
 
-pub struct ChipHandler {
+pub struct Chip8Handler {
     ips: u32,
     cpu: Chip8,
     sys_tx: EventLoopProxy<Chip8Event>,
 }
 
-impl ChipHandler {
-    pub fn new(sys_tx: EventLoopProxy<Chip8Event>) -> ChipHandler {
+impl Chip8Handler {
+    pub fn new(sys_tx: EventLoopProxy<Chip8Event>) -> Chip8Handler {
         let rom = Self::read_rom_from_fs();
-        ChipHandler {
+        Chip8Handler {
             ips: CPU_IPF,
             cpu: Chip8::new().with_rom(&rom),
             sys_tx,

@@ -30,9 +30,10 @@ fn is_white(v: vec3<f32>) -> bool {
 @fragment
 fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
     let c = textureSample(t_diffuse, s_diffuse, in.tex_coords).xyz;
+    //Opposite due to pnm file format
     if is_white(c) {
-        return vec4<f32>(COLOR * 30.0, 0.0); 
-    } else {
         return vec4<f32>(COLOR, 0.0);
+    } else {
+        return vec4<f32>(COLOR * 30.0, 0.0); 
     }
 }

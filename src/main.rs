@@ -1,7 +1,8 @@
 #![feature(let_chains)]
 #![feature(get_many_mut)]
 
-use chip_handler::{event::Chip8Event, ChipHandler};
+use chip8::event::Chip8Event;
+use chip8handler::Chip8Handler;
 use render::Renderer;
 use winit::{
     event::{ElementState, Event, KeyEvent, WindowEvent},
@@ -12,7 +13,8 @@ use winit::{
 
 mod render;
 mod texture;
-mod chip_handler;
+mod chip8handler;
+mod chip8;
 
 pub const ASPECT_RATIO: f32 = 4.0 / 3.0;
 pub const WIDTH: usize = 64;
@@ -20,7 +22,7 @@ pub const HEIGHT: usize = 32;
 
 async fn execute_event_loop(event_loop: EventLoop<Chip8Event>, window: Window) {
     let mut renderer = Renderer::new(&window).await;
-    let mut chip8 = ChipHandler::new(event_loop.create_proxy());
+    let mut chip8 = Chip8Handler::new(event_loop.create_proxy());
 
     event_loop.run(|event, event_target| match event {
         Event::UserEvent(Chip8Event::Shutdown) => {
@@ -69,8 +71,7 @@ async fn execute_event_loop(event_loop: EventLoop<Chip8Event>, window: Window) {
     }).unwrap();
 }
 
-//FIXME This is disgusting
-fn handle_chip8_input(state: ElementState, keycode: KeyCode, chip8: &mut ChipHandler) {
+fn handle_chip8_input(state: ElementState, keycode: KeyCode, chip8: &mut Chip8Handler) {
     let state = match state {
         ElementState::Pressed => true,
         ElementState::Released => false,

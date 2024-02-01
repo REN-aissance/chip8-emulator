@@ -1,25 +1,24 @@
 [package]
 name = "chip8-emulator"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [features]
 kb_debug = []
-trace = []
+kb_trace = []
 intersection_debug = []
 sound_debug = []
-kb_trace = []
-
+trace = []
 
 [dependencies]
-winit = "0.29.10"
-wgpu = "0.19.0"
-bytemuck = {version = "1.14.0", features = ["derive"]}
-rodio = "0.17.3"
+anyhow = "1.0.79"
+bytemuck = { version = "1.14.1", features = ["derive"] }
 futures = "0.3.30"
 rand = "0.8.5"
-anyhow = "1.0.79"
+rodio = "0.17.3"
+wgpu = "0.19.1"
+winit = "0.29.10"
 
 [dependencies.image]
 version = "0.24"
