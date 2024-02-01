@@ -9,8 +9,8 @@ use winit::event_loop::EventLoopProxy;
 
 use self::{chip8::Chip8, event::Chip8Event, screen::ScreenBuffer};
 
-const CPU_IPS: u32 = 15;
-const FF_IPS: u32 = CPU_IPS * 32;
+const CPU_IPF: u32 = 15;
+const FF_IPF: u32 = CPU_IPF * 32;
 
 pub struct ChipHandler {
     ips: u32,
@@ -21,14 +21,14 @@ pub struct ChipHandler {
 impl ChipHandler {
     pub fn new(sys_tx: EventLoopProxy<Chip8Event>) -> ChipHandler {
         ChipHandler {
-            ips: CPU_IPS,
+            ips: CPU_IPF,
             cpu: Chip8::new().with_rom(include_bytes!("../roms/Chip-8-Other/pumpkindressup.ch8")),
             sys_tx,
         }
     }
 
     pub fn update(&mut self) {
-        for _ in 0..CPU_IPS {
+        for _ in 0..CPU_IPF {
             if let Some(e) = self.cpu.update() {
                 match e {
                     Chip8Event::Shutdown | Chip8Event::RequestRedraw => {
@@ -47,11 +47,11 @@ impl ChipHandler {
     }
 
     pub fn start_ff(&mut self) {
-        self.ips = FF_IPS;
+        self.ips = FF_IPF;
     }
 
     pub fn stop_ff(&mut self) {
-        self.ips = CPU_IPS;
+        self.ips = CPU_IPF;
     }
 
     pub fn get_frame_buffer(&self) -> ScreenBuffer {
