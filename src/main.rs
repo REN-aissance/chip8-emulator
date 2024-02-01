@@ -53,15 +53,14 @@ async fn execute_event_loop(event_loop: EventLoop<Chip8Event>, window: Window) {
                 ..
             } => {
                 handle_chip8_input(state, keycode, &mut chip8);
-                if state == ElementState::Pressed {
-                    match (keycode, window.fullscreen()) {
-                        (KeyCode::Escape, _,) => {
-                            event_target.exit();
-                        },
-                        (KeyCode::Enter, Some(_)) => window.set_fullscreen(None),
-                        (KeyCode::Enter, None) => window.set_fullscreen(Some(Fullscreen::Borderless(None))),
-                        _ => (),
+                if state == ElementState::Pressed && keycode == KeyCode::Enter {
+                    match window.fullscreen() {
+                        Some(_) => window.set_fullscreen(None),
+                        None => window.set_fullscreen(Some(Fullscreen::Borderless(None))),
                     }
+                }
+                if keycode == KeyCode::Escape {
+                    event_target.exit();
                 }
             },
             _ => (),
@@ -76,33 +75,30 @@ fn handle_chip8_input(state: ElementState, keycode: KeyCode, chip8: &mut ChipHan
         ElementState::Pressed => true,
         ElementState::Released => false,
     };
-    if let Some(key) = match keycode {
-        KeyCode::Digit1 => Some(0x1),
-        KeyCode::Digit2 => Some(0x2),
-        KeyCode::Digit3 => Some(0x3),
-        KeyCode::Digit4 => Some(0xC),
-        KeyCode::KeyQ => Some(0x4),
-        KeyCode::KeyW => Some(0x5),
-        KeyCode::KeyE => Some(0x6),
-        KeyCode::KeyR => Some(0xD),
-        KeyCode::KeyA => Some(0x7),
-        KeyCode::KeyS => Some(0x8),
-        KeyCode::KeyD => Some(0x9),
-        KeyCode::KeyF => Some(0xE),
-        KeyCode::KeyZ => Some(0xA),
-        KeyCode::KeyX => Some(0x0),
-        KeyCode::KeyC => Some(0xB),
-        KeyCode::KeyV => Some(0xF),
+    match keycode {
         KeyCode::Space => {
-            match state  {
+            match state {
                 true => chip8.start_ff(),
                 false => chip8.stop_ff(),
-            };
-            None
-        }
-        _ => None,
-    } {
-        chip8.update_key(key, state);
+            }
+        },
+        KeyCode::Digit1 => chip8.update_key(0x1, state),
+        KeyCode::Digit2 => chip8.update_key(0x2, state),
+        KeyCode::Digit3 => chip8.update_key(0x3, state),
+        KeyCode::Digit4 => chip8.update_key(0xC, state),
+        KeyCode::KeyQ => chip8.update_key(0x4, state),
+        KeyCode::KeyW => chip8.update_key(0x5, state),
+        KeyCode::KeyE => chip8.update_key(0x6, state),
+        KeyCode::KeyR => chip8.update_key(0xD, state),
+        KeyCode::KeyA => chip8.update_key(0x7, state),
+        KeyCode::KeyS => chip8.update_key(0x8, state),
+        KeyCode::KeyD => chip8.update_key(0x9, state),
+        KeyCode::KeyF => chip8.update_key(0xE, state),
+        KeyCode::KeyZ => chip8.update_key(0xA, state),
+        KeyCode::KeyX => chip8.update_key(0x0, state),
+        KeyCode::KeyC => chip8.update_key(0xB, state),
+        KeyCode::KeyV => chip8.update_key(0xF, state),
+        _ => (),
     }
 }
 
