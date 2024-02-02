@@ -19,7 +19,6 @@ use std::fmt::Write;
 pub enum CPUError {
     UnknownOpcode(u16, u16),
     RamOutOfBounds,
-    InvalidTextIndex(u8),
 }
 
 impl fmt::Display for CPUError {
@@ -30,7 +29,6 @@ impl fmt::Display for CPUError {
                 i, pc
             ),
             CPUError::RamOutOfBounds => write!(f, "ERROR: Ran out of RAM"),
-            CPUError::InvalidTextIndex(vx) => write!(f, "ERROR: Invalid text index 0x{:0X}", vx),
         }
     }
 }
@@ -235,7 +233,7 @@ impl Chip8 {
                 0x9E => {
                     #[cfg(feature = "kb_debug")]
                     println!("Checking for key press {:X}", x);
-                    if self.kb.is_pressed(vx as usize) {
+                    if self.kb.is_pressed((vx & 0xF) as usize) {
                         return Ok(Chip8Event::SkipNextInstruction);
                     };
                 }
@@ -243,7 +241,7 @@ impl Chip8 {
                 0xA1 => {
                     #[cfg(feature = "kb_debug")]
                     println!("Checking key not pressed {:X}", x);
-                    if !self.kb.is_pressed(vx as usize) {
+                    if !self.kb.is_pressed((vx & 0xF) as usize) {
                         return Ok(Chip8Event::SkipNextInstruction);
                     };
                 }
@@ -272,13 +270,7 @@ impl Chip8 {
                 //Fx1E ADD I, Vx
                 0x1E => self.i = self.i.wrapping_add(vx as u16),
                 //Fx29 LD F, Vx
-                0x29 => {
-                    if vx <= 0xF {
-                        self.i = vx as u16 * 5
-                    } else {
-                        return Err(CPUError::InvalidTextIndex(vx).into());
-                    }
-                }
+                0x29 => self.i = (vx & 0xF) as u16 * 5,
                 //Fx33 LD B, Vx
                 0x33 => {
                     let i = self.i as usize;
