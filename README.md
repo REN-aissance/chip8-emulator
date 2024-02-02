@@ -8,5 +8,8 @@ ZXCV -> A0BF
 
 Space to fast-forward, escape to exit the program, enter to toggle fullscreen.
 
+To run, clone and compile the git repo, then run:\
+cargo run --release "path-to-rom"
+
 For more information, see:\
 https://en.wikipedia.org/wiki/CHIP-8
