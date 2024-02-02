@@ -14,7 +14,6 @@ use rand::Rng;
 use std::fmt;
 #[cfg(debug_assertions)]
 use std::fmt::Write;
-use std::time::Duration;
 
 #[derive(Debug, Copy, Clone)]
 pub enum CPUError {
@@ -45,7 +44,7 @@ pub struct Chip8 {
     kb: Keyboard,
     stack: Stack,
     kb_halt_reg: Option<usize>,
-    ram: [u8; 4096],
+    ram: [u8; 0x1000],
     reg: [u8; 16],
     dt: u8,
     st: u8,
@@ -90,9 +89,14 @@ impl Chip8 {
         self.screen.extract_buffer()
     }
 
-    pub fn decrement_timers(&mut self) {
-        self.dt = self.dt.saturating_sub(1);
-        self.st = self.st.saturating_sub(1);
+    pub fn update_timers(&mut self) {
+        if self.kb_halt_reg.is_none() {
+            self.dt = self.dt.saturating_sub(1);
+            self.st = self.st.saturating_sub(1);
+        }
+        if self.st == 0 {
+            self.buzzer.pause();
+        }
     }
 
     pub fn set_key(&mut self, key: u8, state: bool) {
@@ -253,6 +257,7 @@ impl Chip8 {
                 0x0A => {
                     #[cfg(feature = "kb_debug")]
                     println!("Halting for key press {:X}", x);
+                    self.st = 4; //Original VIP does this
                     return Ok(Chip8Event::KBHaltOnBuffer(x));
                 }
                 //Fx15 LD DT, Vx
@@ -261,7 +266,7 @@ impl Chip8 {
                 0x18 => {
                     #[cfg(feature = "sound_debug")]
                     println!("Received opcode to play sound");
-                    self.buzzer.play(Duration::from_secs_f32(vx as f32 / 60.0));
+                    self.buzzer.play();
                     self.st = vx;
                 }
                 //Fx1E ADD I, Vx
@@ -364,7 +369,7 @@ impl Chip8 {
         self.kb.press_key(key as usize);
 
         if self.kb_halt_reg.is_some() {
-            self.buzzer.play(Duration::from_millis(200));
+            self.buzzer.play();
         }
     }
 
@@ -378,6 +383,7 @@ impl Chip8 {
         if let Some(x) = self.kb_halt_reg {
             self.reg[x] = self.kb.last_pressed();
             self.kb_halt_reg = None;
+            self.buzzer.pause();
         }
     }
 }

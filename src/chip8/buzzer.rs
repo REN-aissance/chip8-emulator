@@ -1,5 +1,5 @@
 use mpsc::Receiver;
-use rodio::{OutputStream, Source};
+use rodio::{OutputStream, Sink, Source};
 use std::{
     sync::mpsc::{self, Sender},
     thread::{self},
@@ -10,11 +10,11 @@ use std::f32::consts::TAU;
 
 #[derive(Eq, PartialEq, Copy, Clone, Debug)]
 pub enum AudioEvent {
-    Play(Duration),
+    Play,
+    Pause,
     Terminate,
 }
 
-//TODO Rework this ENTIRELY so it uses a play/pause mechanism
 pub struct Buzzer {
     tx: Sender<AudioEvent>,
 }
@@ -26,25 +26,38 @@ impl Buzzer {
         Self { tx }
     }
 
-    pub fn play(&self, d: Duration) {
-        self.tx.send(AudioEvent::Play(d)).unwrap();
+    pub fn play(&self) {
+        self.tx.send(AudioEvent::Play).unwrap();
+    }
+
+    pub fn pause(&self) {
+        self.tx.send(AudioEvent::Pause).unwrap();
     }
 
     fn event_handler(rx: Receiver<AudioEvent>) {
-        let sound = SquareWave::new(261.60).amplify(0.1);
+        let sound = SquareWave::new(261.60);
         let (_stream, stream_handle) = OutputStream::try_default().unwrap();
+        let sink = Sink::try_new(&stream_handle).unwrap();
+        sink.set_volume(0.2);
+        sink.pause();
+        sink.append(sound);
         loop {
             match rx.recv() {
-                Ok(AudioEvent::Play(d)) => {
+                Ok(AudioEvent::Play) => {
                     #[cfg(feature = "sound_debug")]
-                    println!("Attempting to play sound for {}ms", d.as_millis());
-                    let sound = sound.clone().take_duration(d);
-                    stream_handle.play_raw(sound).unwrap();
-                    thread::sleep(d);
+                    println!("Sound start");
+                    sink.play();
+                }
+                Ok(AudioEvent::Pause) => {
+                    #[cfg(feature = "sound_debug")]
+                    println!("Sound stop");
+                    sink.pause();
                 }
                 Ok(AudioEvent::Terminate) => break,
                 Err(e) => panic!("{}", e),
             }
+            //Prevent this loop from running at full speed wastng cycles
+            thread::sleep(Duration::from_secs_f64(1.0 / 60.0))
         }
     }
 

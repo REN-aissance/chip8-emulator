@@ -38,7 +38,7 @@ impl Chip8Handler {
                 }
             }
         }
-        self.cpu.decrement_timers();
+        self.cpu.update_timers();
     }
 
     pub fn update_key(&mut self, key: u8, state: bool) {
