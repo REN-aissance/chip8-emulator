@@ -6,7 +6,7 @@ QWER -> 456D\
 ASDF -> 789E\
 ZXCV -> A0BF
 
-Space to fast-forward, escape to exit the program, enter to toggle fullscreen.
+Space to fast-forward, escape to exit the program, enter to toggle fullscreen, backslash to reset.
 
 To run, clone and compile the git repo, then run:\
 cargo run --release "path-to-rom"
