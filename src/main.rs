@@ -83,6 +83,7 @@ fn handle_chip8_input(state: ElementState, keycode: KeyCode, chip8: &mut Chip8Ha
                 false => chip8.stop_ff(),
             }
         },
+        KeyCode::Backslash => chip8.reset(),
         KeyCode::Digit1 => chip8.update_key(0x1, state),
         KeyCode::Digit2 => chip8.update_key(0x2, state),
         KeyCode::Digit3 => chip8.update_key(0x3, state),

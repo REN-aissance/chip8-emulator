@@ -7,32 +7,40 @@ use winit::event_loop::EventLoopProxy;
 use crate::chip8::{event::Chip8Event, screen::ScreenBuffer, Chip8, ENTRY_POINT};
 
 const CPU_IPF: u32 = 15;
-const FF_IPF: u32 = CPU_IPF * 32;
+const FF_IPF: u32 = CPU_IPF * 16;
 const MAX_FILESIZE: u64 = 0x1000 - ENTRY_POINT as u64;
 
 pub struct Chip8Handler {
-    ips: u32,
+    ipf: u32,
     cpu: Chip8,
     sys_tx: EventLoopProxy<Chip8Event>,
+    ff: bool,
 }
 
 impl Chip8Handler {
     pub fn new(sys_tx: EventLoopProxy<Chip8Event>) -> Chip8Handler {
-        let rom = Self::read_rom_from_fs();
         Chip8Handler {
-            ips: CPU_IPF,
-            cpu: Chip8::new().with_rom(&rom),
+            ipf: CPU_IPF,
+            cpu: Chip8::new().with_rom(&Self::read_rom_from_fs()),
             sys_tx,
+            ff: false,
         }
     }
 
     pub fn update(&mut self) {
-        for _ in 0..CPU_IPF {
+        for _ in 0..self.ipf {
             if let Some(e) = self.cpu.update() {
                 match e {
-                    Chip8Event::Shutdown | Chip8Event::RequestRedraw => {
+                    Chip8Event::Shutdown => {
                         self.sys_tx.send_event(e).unwrap();
                         break;
+                    }
+                    Chip8Event::RequestRedraw => {
+                        //Ignore cpu-requested redraw events while in fast-forward
+                        if !self.ff {
+                            self.sys_tx.send_event(e).unwrap();
+                            break;
+                        }
                     }
                     _ => (),
                 }
@@ -46,15 +54,21 @@ impl Chip8Handler {
     }
 
     pub fn start_ff(&mut self) {
-        self.ips = FF_IPF;
+        self.ff = true;
+        self.ipf = FF_IPF;
     }
 
     pub fn stop_ff(&mut self) {
-        self.ips = CPU_IPF;
+        self.ff = false;
+        self.ipf = CPU_IPF;
     }
 
     pub fn get_frame_buffer(&self) -> ScreenBuffer {
         self.cpu.get_display_buffer()
+    }
+
+    pub fn reset(&mut self) {
+        self.cpu = Chip8::new().with_rom(&Self::read_rom_from_fs());
     }
 
     fn read_rom_from_fs() -> Vec<u8> {
