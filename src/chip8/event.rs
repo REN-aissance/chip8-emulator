@@ -5,7 +5,6 @@ pub enum Chip8Event {
     RequestRedraw,
     SkipNextInstruction,
     DoNotIncrementPC,
-    Shutdown,
 }
 
 unsafe impl Sync for Chip8Event {}

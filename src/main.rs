@@ -25,9 +25,6 @@ async fn execute_event_loop(event_loop: EventLoop<Chip8Event>, window: Window) {
     let mut chip8 = Chip8Handler::new(event_loop.create_proxy());
 
     event_loop.run(|event, event_target| match event {
-        Event::UserEvent(Chip8Event::Shutdown) => {
-            event_target.exit();
-        }
         Event::UserEvent(Chip8Event::RequestRedraw) => {
             window.request_redraw();
         }

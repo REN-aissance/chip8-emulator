@@ -29,21 +29,12 @@ impl Chip8Handler {
 
     pub fn update(&mut self) {
         for _ in 0..self.ipf {
-            if let Some(e) = self.cpu.update() {
-                match e {
-                    Chip8Event::Shutdown => {
-                        self.sys_tx.send_event(e).unwrap();
-                        break;
-                    }
-                    Chip8Event::RequestRedraw => {
-                        //Ignore cpu-requested redraw events while in fast-forward
-                        if !self.ff {
-                            self.sys_tx.send_event(e).unwrap();
-                            break;
-                        }
-                    }
-                    _ => (),
-                }
+            if let Some(Chip8Event::RequestRedraw) = self.cpu.update()
+                //Ignore cpu-requested redraw events while in fast-forward
+                    && !self.ff
+            {
+                self.sys_tx.send_event(Chip8Event::RequestRedraw).unwrap();
+                break;
             }
         }
         self.cpu.update_timers();
