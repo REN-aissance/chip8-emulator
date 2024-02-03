@@ -23,7 +23,7 @@ winit = "0.29.10"
 [dependencies.image]
 version = "0.24"
 default-features = false
-features = ["pnm"]
+features = ["pnm", "ico"]
 
 [profile.release]
 opt-level = "s"

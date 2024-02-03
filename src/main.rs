@@ -1,14 +1,17 @@
 #![feature(let_chains)]
 #![feature(get_many_mut)]
 
+use std::io::Cursor;
+
 use chip8::event::Chip8Event;
 use chip8handler::Chip8Handler;
+use image::{codecs::ico::IcoDecoder, ImageDecoder};
 use render::Renderer;
 use winit::{
     event::{ElementState, Event, KeyEvent, WindowEvent},
     event_loop::{ControlFlow, EventLoop, EventLoopBuilder},
     keyboard::{KeyCode, PhysicalKey},
-    window::{Fullscreen, Window},
+    window::{Fullscreen, Icon, Window},
 };
 
 mod render;
@@ -101,10 +104,23 @@ fn handle_chip8_input(state: ElementState, keycode: KeyCode, chip8: &mut Chip8Ha
     }
 }
 
+const ICON: &[u8] = include_bytes!("../ch8.ico");
+
+fn set_icon(window: &mut Window) {
+    let cursor = Cursor::new(ICON);
+    let decoder = IcoDecoder::new(cursor).unwrap();
+    let mut bytes = vec![0; decoder.total_bytes() as usize];
+    let (w, h) = decoder.dimensions();
+    decoder.read_image(&mut bytes).unwrap(); 
+    let icon = Icon::from_rgba(bytes, w, h).unwrap();
+    window.set_window_icon(Some(icon));
+}
+
 pub fn main() {
     let event_loop = EventLoopBuilder::<Chip8Event>::with_user_event().build().expect("Could not create event_loop");
     event_loop.set_control_flow(ControlFlow::Poll);
-    let window = Window::new(&event_loop).expect("Could not create window");
+    let mut window = Window::new(&event_loop).expect("Could not create window");
     window.set_title("Chip-8 Emulator");
+    set_icon(&mut window);
     futures::executor::block_on(execute_event_loop(event_loop, window));
 }
