@@ -35,7 +35,7 @@ impl fmt::Display for CPUError {
 impl std::error::Error for CPUError {}
 
 pub const ENTRY_POINT: u16 = 0x200;
-pub const ERR_LOC: u16 = TEXT_SPRITES.len() as u16 + 1; //alignment
+pub const ERR_LOC: u16 = TEXT_SPRITES.len() as u16;
 
 pub struct Chip8 {
     screen: Screen,
@@ -383,7 +383,7 @@ impl Chip8 {
     }
 }
 
-const TEXT_SPRITES: [[u8; 5]; 17] = [
+const TEXT_SPRITES: [[u8; 5]; 16] = [
     [0xF0, 0x90, 0x90, 0x90, 0xF0], //0
     [0x20, 0x60, 0x20, 0x20, 0x70], //1
     [0xF0, 0x10, 0xF0, 0x80, 0xF0], //2
@@ -400,9 +400,8 @@ const TEXT_SPRITES: [[u8; 5]; 17] = [
     [0xE0, 0x90, 0x90, 0x90, 0xE0], //D
     [0xF0, 0x80, 0xF0, 0x80, 0xF0], //E
     [0xF0, 0x80, 0xF0, 0x80, 0x80], //F
-    //R For gracefully handling internal crashes
-    [0xF0, 0x88, 0xE0, 0xA0, 0x09],
 ];
+
 #[rustfmt::skip]
 const ERR_CODE: [u8; 12] = [
     //CLS
@@ -413,7 +412,7 @@ const ERR_CODE: [u8; 12] = [
     0xF1, 0x29,
     0xD0, 0x05,
     //Loop
-    0x10, 0x62, //hardcoded :)
+    0x10, 0x52, //hardcoded :)
 ];
 
 #[cfg(debug_assertions)]

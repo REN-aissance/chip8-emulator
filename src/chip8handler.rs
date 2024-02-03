@@ -60,6 +60,7 @@ impl Chip8Handler {
 
     pub fn reset(&mut self) {
         self.cpu = Chip8::new().with_rom(&Self::read_rom_from_fs());
+        self.sys_tx.send_event(Chip8Event::RequestRedraw).unwrap();
     }
 
     fn read_rom_from_fs() -> Vec<u8> {
