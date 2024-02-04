@@ -35,7 +35,7 @@ impl fmt::Display for CPUError {
 impl std::error::Error for CPUError {}
 
 pub const ENTRY_POINT: u16 = 0x200;
-pub const ERR_LOC: u16 = TEXT_SPRITES.len() as u16;
+pub const ERR_LOC: u16 = (TEXT_SPRITES.len() * 5) as u16;
 
 pub struct Chip8 {
     screen: Screen,
@@ -412,7 +412,7 @@ const ERR_CODE: [u8; 12] = [
     0xF1, 0x29,
     0xD0, 0x05,
     //Loop
-    0x10, 0x52, //hardcoded :)
+    0x10, 0x5A, //hardcoded :)
 ];
 
 #[cfg(debug_assertions)]
